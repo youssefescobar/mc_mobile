@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity, Keyboard } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api } from '../services/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useToast } from '../components/ToastContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VerifyEmail'>;
 
@@ -11,37 +12,67 @@ export default function VerifyEmailScreen({ route, navigation }: Props) {
     const { email } = route.params;
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
+    const [resending, setResending] = useState(false);
+    const [cooldown, setCooldown] = useState(0);
     const inputRef = useRef<TextInput>(null);
+    const { showToast } = useToast();
 
     const handleVerify = async () => {
         if (!code || code.length !== 6) {
-            Alert.alert('Invalid Code', 'Please enter the full 6-digit code sent to your email.');
+            showToast('Please enter the full 6-digit code sent to your email.', 'error', { title: 'Invalid Code' });
             return;
         }
 
         setLoading(true);
         try {
-            const response = await api.post('/auth/verify-email', {
-                email,
-                code
-            });
+            await api.post('/auth/verify-email', { email, code });
 
-            Alert.alert(
-                'Success!',
+            showToast(
                 'Your email has been verified. You can now sign in.',
-                [
-                    { text: 'Login Now', onPress: () => navigation.replace('Login') }
-                ]
+                'success',
+                {
+                    title: 'Verified!',
+                    actionLabel: 'Login',
+                    onAction: () => navigation.replace('Login')
+                }
             );
+
+            setTimeout(() => navigation.replace('Login'), 2000);
         } catch (error: any) {
             console.error('Verification Error:', error);
-            Alert.alert('Verification Failed', error.response?.data?.message || 'Invalid code');
+            showToast(error.response?.data?.message || 'Invalid code', 'error', { title: 'Verification Failed' });
         } finally {
             setLoading(false);
         }
     };
 
-    // Render the 6 code boxes
+    const handleResend = async () => {
+        if (cooldown > 0) return;
+
+        setResending(true);
+        try {
+            await api.post('/auth/resend-verification', { email });
+            showToast('A new verification code has been sent to your email.', 'success', { title: 'Code Sent!' });
+
+            // Start 60 second cooldown
+            setCooldown(60);
+            const interval = setInterval(() => {
+                setCooldown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(interval);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } catch (error: any) {
+            console.error('Resend Error:', error);
+            showToast(error.response?.data?.message || 'Failed to resend code', 'error', { title: 'Error' });
+        } finally {
+            setResending(false);
+        }
+    };
+
     const renderCodeBoxes = () => {
         const boxes = [];
         for (let i = 0; i < 6; i++) {
@@ -58,55 +89,67 @@ export default function VerifyEmailScreen({ route, navigation }: Props) {
 
     return (
         <SafeAreaView style={styles.container}>
-            <TouchableOpacity
-                style={styles.content}
-                activeOpacity={1}
-                onPress={() => inputRef.current?.focus()}
-            >
-                <View style={styles.headerContainer}>
-                    <View style={styles.iconCircle}>
-                        <Text style={styles.iconText}>✉️</Text>
-                    </View>
-                    <Text style={styles.title}>Verify Email</Text>
-                    <Text style={styles.subtitle}>
-                        We sent a code to{"\n"}
-                        <Text style={styles.emailHighlight}>{email}</Text>
-                    </Text>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.content}>
+                    <TouchableOpacity
+                        style={styles.innerContent}
+                        activeOpacity={1}
+                        onPress={() => inputRef.current?.focus()}
+                    >
+                        <View style={styles.headerContainer}>
+                            <View style={styles.iconCircle}>
+                                <Text style={styles.iconText}>✉️</Text>
+                            </View>
+                            <Text style={styles.title}>Verify Email</Text>
+                            <Text style={styles.subtitle}>
+                                We sent a code to{"\n"}
+                                <Text style={styles.emailHighlight}>{email}</Text>
+                            </Text>
+                        </View>
+
+                        <View style={styles.codeContainer}>
+                            {renderCodeBoxes()}
+                        </View>
+
+                        <TextInput
+                            ref={inputRef}
+                            style={styles.hiddenInput}
+                            value={code}
+                            onChangeText={(text) => {
+                                const numeric = text.replace(/[^0-9]/g, '');
+                                if (numeric.length <= 6) setCode(numeric);
+                                if (numeric.length === 6) Keyboard.dismiss();
+                            }}
+                            keyboardType="number-pad"
+                            maxLength={6}
+                            autoFocus
+                        />
+
+                        <TouchableOpacity
+                            style={[styles.button, (code.length !== 6 || loading) && styles.buttonDisabled]}
+                            onPress={handleVerify}
+                            disabled={code.length !== 6 || loading}
+                        >
+                            <Text style={styles.buttonText}>{loading ? "Verifying..." : "Verify Code"}</Text>
+                        </TouchableOpacity>
+
+                        {/* Resend Button */}
+                        <TouchableOpacity
+                            onPress={handleResend}
+                            disabled={resending || cooldown > 0}
+                            style={styles.resendButton}
+                        >
+                            <Text style={[styles.resendText, (resending || cooldown > 0) && styles.resendTextDisabled]}>
+                                {resending ? "Sending..." : cooldown > 0 ? `Resend in ${cooldown}s` : "Didn't receive a code? Resend"}
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backButton}>
+                            <Text style={styles.backText}>Back to Login</Text>
+                        </TouchableOpacity>
+                    </TouchableOpacity>
                 </View>
-
-                <View style={styles.codeContainer}>
-                    {renderCodeBoxes()}
-                </View>
-
-                {/* Hidden Input for handling typing */}
-                <TextInput
-                    ref={inputRef}
-                    style={styles.hiddenInput}
-                    value={code}
-                    onChangeText={(text) => {
-                        // Only allow numbers and max 6 chars
-                        const numeric = text.replace(/[^0-9]/g, '');
-                        if (numeric.length <= 6) setCode(numeric);
-                        if (numeric.length === 6) Keyboard.dismiss();
-                    }}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    autoFocus
-                />
-
-                <TouchableOpacity
-                    style={[styles.button, (code.length !== 6 || loading) && styles.buttonDisabled]}
-                    onPress={handleVerify}
-                    disabled={code.length !== 6 || loading}
-                >
-                    <Text style={styles.buttonText}>{loading ? "Verifying..." : "Verify Code"}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backButton}>
-                    <Text style={styles.backText}>Back to Login</Text>
-                </TouchableOpacity>
-
-            </TouchableOpacity>
+            </TouchableWithoutFeedback>
         </SafeAreaView>
     );
 }
@@ -117,6 +160,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#F8F9FA',
     },
     content: {
+        flex: 1,
+    },
+    innerContent: {
         flex: 1,
         padding: 24,
         alignItems: 'center',
@@ -130,7 +176,7 @@ const styles = StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: '#E3F2FD', // Light blue bg
+        backgroundColor: '#E3F2FD',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
@@ -177,7 +223,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     codeBoxActive: {
-        borderColor: '#007AFF', // Highlight active or filled boxes
+        borderColor: '#007AFF',
         borderWidth: 2,
         backgroundColor: '#F0F8FF',
     },
@@ -213,6 +259,18 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 18,
         fontWeight: 'bold',
+    },
+    resendButton: {
+        padding: 10,
+        marginBottom: 10,
+    },
+    resendText: {
+        color: '#007AFF',
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    resendTextDisabled: {
+        color: '#999',
     },
     backButton: {
         padding: 10,

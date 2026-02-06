@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api } from '../services/api';
 import { Group, Pilgrim } from '../types';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useToast } from '../components/ToastContext';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupDetails'>;
 
@@ -13,6 +15,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const [pilgrims, setPilgrims] = useState<Pilgrim[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
+    const { showToast } = useToast();
 
     // Add Pilgrim Form State
     const [newPilgrimName, setNewPilgrimName] = useState('');
@@ -23,21 +26,14 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const fetchGroupDetails = async () => {
         try {
             setLoading(true);
-            // using the same dashboard endpoint for now, filtering locally, 
-            // OR ideally we should have a get_group_by_id endpoint.
-            // For now, let's re-fetch the specific group details if possible or assume the backend provides one.
-            // Checking backend routes... we might not have a specific 'get group details' for mobile optimized
-            // actually group_routes.js has router.get('/:id', group_controller.get_group_by_id); logic? 
-            // Let's try that.
             const response = await api.get(`/groups/${groupId}`);
-            if (response.data.success) {
-                // The backend likely returns the group object directly or wrapped
-                const groupData: Group = response.data.data;
-                setPilgrims(groupData.pilgrims || []);
+            // Backend returns group object directly for single group
+            if (response.data) {
+                setPilgrims(response.data.pilgrims || []);
             }
         } catch (error: any) {
             console.error(error);
-            Alert.alert('Error', 'Failed to load pilgrims');
+            showToast('Failed to load pilgrims', 'error', { title: 'Error' });
         } finally {
             setLoading(false);
         }
@@ -49,7 +45,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
 
     const handleAddPilgrim = async () => {
         if (!newPilgrimName || !newPilgrimNationalId) {
-            Alert.alert('Missing Info', 'Name and National ID are required.');
+            showToast('Name and National ID are required.', 'error', { title: 'Missing Info' });
             return;
         }
 
@@ -59,25 +55,92 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 full_name: newPilgrimName,
                 national_id: newPilgrimNationalId,
                 phone_number: newPilgrimPhone,
-                // defaults
                 age: 30,
                 gender: 'male',
                 medical_history: 'None'
             });
 
             if (response.data.success) {
-                Alert.alert('Success', 'Pilgrim added successfully!');
+                showToast(`${newPilgrimName} has been added to the group.`, 'success', { title: 'Pilgrim Added!' });
                 setShowAddModal(false);
                 setNewPilgrimName('');
                 setNewPilgrimNationalId('');
                 setNewPilgrimPhone('');
-                fetchGroupDetails(); // Refresh list
+                fetchGroupDetails();
             }
         } catch (error: any) {
             console.error(error);
-            Alert.alert('Error', error.response?.data?.message || 'Failed to add pilgrim');
+            showToast(error.response?.data?.message || 'Failed to add pilgrim', 'error', { title: 'Error' });
         } finally {
             setAdding(false);
+        }
+    };
+
+    // Delete Confirmation State
+    const [showDeletePilgrimModal, setShowDeletePilgrimModal] = useState(false);
+    const [selectedPilgrim, setSelectedPilgrim] = useState<{ id: string, name: string } | null>(null);
+    const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false);
+
+    // Invite Moderator State
+    const [showInviteModal, setShowInviteModal] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState('');
+    const [inviting, setInviting] = useState(false);
+
+    const handleInviteModerator = async () => {
+        if (!inviteEmail) {
+            showToast('Please enter an email address', 'error');
+            return;
+        }
+
+        setInviting(true);
+        try {
+            await api.post(`/groups/${groupId}/invite`, { email: inviteEmail });
+            showToast('Invitation sent successfully', 'success');
+            setShowInviteModal(false);
+            setInviteEmail('');
+        } catch (error: any) {
+            console.error('Invite error:', error);
+            showToast(error.response?.data?.message || 'Failed to send invitation', 'error');
+        } finally {
+            setInviting(false);
+        }
+    };
+
+    const handleRemovePilgrim = (pilgrimId: string, pilgrimName: string) => {
+        setSelectedPilgrim({ id: pilgrimId, name: pilgrimName });
+        setShowDeletePilgrimModal(true);
+    };
+
+    const confirmRemovePilgrim = async () => {
+        if (!selectedPilgrim) return;
+
+        try {
+            await api.post(`/groups/${groupId}/remove-pilgrim`, { user_id: selectedPilgrim.id });
+            showToast('Pilgrim removed successfully', 'success');
+            setPilgrims(prev => prev.filter(p => p._id !== selectedPilgrim.id));
+        } catch (error: any) {
+            showToast('Failed to remove pilgrim', 'error');
+        } finally {
+            setShowDeletePilgrimModal(false);
+            setSelectedPilgrim(null);
+        }
+    };
+
+    const handleDeleteGroup = async () => {
+        setShowDeleteGroupModal(true);
+    };
+
+    const confirmDeleteGroup = async () => {
+        try {
+            setLoading(true);
+            await api.delete(`/groups/${groupId}`);
+            showToast('Group deleted successfully', 'success');
+            setShowDeleteGroupModal(false);
+            navigation.goBack();
+        } catch (error: any) {
+            showToast('Failed to delete group', 'error');
+            setLoading(false);
+            setShowDeleteGroupModal(false);
         }
     };
 
@@ -97,7 +160,12 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                     <Text style={styles.summaryCount}>{pilgrims.length}</Text>
                 </View>
 
-                <Text style={styles.sectionTitle}>Pilgrim List</Text>
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Pilgrim List</Text>
+                    <TouchableOpacity onPress={() => setShowInviteModal(true)}>
+                        <Text style={styles.inviteLink}>+ Invite Moderator</Text>
+                    </TouchableOpacity>
+                </View>
 
                 {loading ? (
                     <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
@@ -114,16 +182,32 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                     <View>
                                         <Text style={styles.pilgrimName}>{item.full_name}</Text>
                                         <Text style={styles.pilgrimId}>ID: {item.national_id}</Text>
+                                        {item.location && (
+                                            <View style={styles.statusIndicator}>
+                                                <View style={[styles.statusDot, { backgroundColor: '#4CD964' }]} />
+                                                <Text style={styles.statusText}>Online</Text>
+                                            </View>
+                                        )}
                                     </View>
                                 </View>
-                                <View style={styles.statusIndicator}>
-                                    <View style={[styles.statusDot, { backgroundColor: item.location ? '#4CD964' : '#FF9500' }]} />
-                                    <Text style={styles.statusText}>{item.location ? 'Online' : 'Offline'}</Text>
-                                </View>
+                                <TouchableOpacity
+                                    onPress={() => handleRemovePilgrim(item._id, item.full_name)}
+                                    style={styles.deletePilgrimButton}
+                                >
+                                    <Text style={styles.deletePilgrimText}>✕</Text>
+                                </TouchableOpacity>
                             </View>
                         )}
                         contentContainerStyle={{ paddingBottom: 100 }}
                         ListEmptyComponent={<Text style={styles.emptyText}>No pilgrims in this group yet.</Text>}
+                        ListFooterComponent={
+                            <TouchableOpacity
+                                style={styles.deleteGroupButton}
+                                onPress={handleDeleteGroup}
+                            >
+                                <Text style={styles.deleteGroupText}>Delete Group</Text>
+                            </TouchableOpacity>
+                        }
                     />
                 )}
             </View>
@@ -188,8 +272,66 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
+
             </Modal>
-        </View>
+            {/* Confirmation Modals */}
+            <ConfirmationModal
+                visible={showDeletePilgrimModal}
+                title="Remove Pilgrim"
+                message={`Are you sure you want to remove ${selectedPilgrim?.name} from this group?`}
+                onConfirm={confirmRemovePilgrim}
+                onCancel={() => setShowDeletePilgrimModal(false)}
+                confirmText="Remove"
+                isDestructive={true}
+            />
+
+            <ConfirmationModal
+                visible={showDeleteGroupModal}
+                title="Delete Group"
+                message={`Are you sure you want to delete "${groupName}"? This action cannot be undone.`}
+                onConfirm={confirmDeleteGroup}
+                onCancel={() => setShowDeleteGroupModal(false)}
+                confirmText="Delete Group"
+                isDestructive={true}
+            />
+
+            {/* Invite Moderator Modal */}
+            <Modal
+                visible={showInviteModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowInviteModal(false)}
+            >
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+                    <View style={styles.modalContentSmall}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Invite Moderator</Text>
+                            <TouchableOpacity onPress={() => setShowInviteModal(false)}>
+                                <Text style={styles.closeText}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.label}>Email Address</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="colleague@example.com"
+                            value={inviteEmail}
+                            onChangeText={setInviteEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+
+                        <TouchableOpacity
+                            style={[styles.addButton, inviting && styles.buttonDisabled]}
+                            onPress={handleInviteModerator}
+                            disabled={inviting}
+                        >
+                            <Text style={styles.addButtonText}>{inviting ? "Sending..." : "Send Invitation"}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+        </View >
     );
 }
 
@@ -247,11 +389,28 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#007AFF',
     },
+    sectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 15,
+    },
+    inviteLink: {
+        fontSize: 14,
+        color: '#007AFF',
+        fontWeight: '600',
+    },
+    modalContentSmall: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 24,
+        width: '90%',
+        alignSelf: 'center',
     },
     pilgrimCard: {
         backgroundColor: 'white',
@@ -391,6 +550,36 @@ const styles = StyleSheet.create({
     addButtonText: {
         color: 'white',
         fontSize: 18,
+        fontWeight: 'bold',
+    },
+    deletePilgrimButton: {
+        marginLeft: 8,
+        backgroundColor: '#FFEBEE',
+        borderRadius: 16,
+        width: 32,
+        height: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    deletePilgrimText: {
+        fontSize: 14,
+        color: '#FF3B30',
+        fontWeight: 'bold',
+        marginTop: -2, // Micro-adjustment to visually center the X
+    },
+    deleteGroupButton: {
+        backgroundColor: '#FFE5E5',
+        borderRadius: 12,
+        paddingVertical: 16,
+        alignItems: 'center',
+        marginTop: 20,
+        marginBottom: 40,
+        borderWidth: 1,
+        borderColor: '#FF3B30',
+    },
+    deleteGroupText: {
+        color: '#FF3B30',
+        fontSize: 16,
         fontWeight: 'bold',
     },
 });

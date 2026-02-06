@@ -5,5 +5,8 @@ export type RootStackParamList = {
     CreateGroup: undefined;
     GroupDetails: { groupId: string; groupName: string };
     PilgrimDashboard: { userId: string };
+    PilgrimProfile: { userId: string };
     ModeratorDashboard: { userId: string };
+    Notifications: undefined;
+    EditProfile: undefined;
 };

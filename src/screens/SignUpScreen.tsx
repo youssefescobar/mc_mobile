@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api } from '../services/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useToast } from '../components/ToastContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignUp'>;
 
@@ -13,10 +14,11 @@ export default function SignUpScreen({ navigation }: Props) {
     const [password, setPassword] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [loading, setLoading] = useState(false);
+    const { showToast } = useToast();
 
     const handleSignUp = async () => {
         if (!fullName || !email || !password || !phoneNumber) {
-            Alert.alert('Missing Fields', 'Please fill in all details.');
+            showToast('Please fill in all details.', 'error', { title: 'Missing Fields' });
             return;
         }
 
@@ -30,16 +32,21 @@ export default function SignUpScreen({ navigation }: Props) {
                 phone_number: phoneNumber
             });
 
-            Alert.alert(
-                'Account Created',
+            showToast(
                 response.data.message || 'Please check your email for the verification code.',
-                [
-                    { text: 'Verify Now', onPress: () => navigation.navigate('VerifyEmail', { email }) }
-                ]
+                'success',
+                {
+                    title: 'Account Created!',
+                    actionLabel: 'Verify',
+                    onAction: () => navigation.navigate('VerifyEmail', { email })
+                }
             );
+
+            // Auto-navigate after showing success
+            setTimeout(() => navigation.navigate('VerifyEmail', { email }), 2000);
         } catch (error: any) {
             console.error('Registration Error:', error);
-            Alert.alert('Registration Failed', error.response?.data?.message || 'Something went wrong');
+            showToast(error.response?.data?.message || 'Something went wrong', 'error', { title: 'Registration Failed' });
         } finally {
             setLoading(false);
         }
@@ -51,7 +58,12 @@ export default function SignUpScreen({ navigation }: Props) {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+                >
 
                     <View style={styles.headerContainer}>
                         <Text style={styles.title}>Create Account</Text>
@@ -184,7 +196,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     button: {
-        backgroundColor: '#007AFF', // Primary Blue
+        backgroundColor: '#007AFF',
         borderRadius: 12,
         paddingVertical: 16,
         alignItems: 'center',

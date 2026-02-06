@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity, Image, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, KeyboardAvoidingView, Platform, Dimensions, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api, setAuthToken } from '../services/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useToast } from '../components/ToastContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -13,10 +14,11 @@ export default function LoginScreen({ navigation }: Props) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const { showToast } = useToast();
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Missing Fields', 'Please enter both email and password.');
+            showToast('Please enter both email and password.', 'error', { title: 'Missing Fields' });
             return;
         }
 
@@ -30,6 +32,7 @@ export default function LoginScreen({ navigation }: Props) {
             console.log('Login successful:', role);
             setAuthToken(token);
 
+            // Navigate directly - no need for success toast
             if (role === 'moderator') {
                 navigation.replace('ModeratorDashboard', { userId: user_id });
             } else {
@@ -37,7 +40,7 @@ export default function LoginScreen({ navigation }: Props) {
             }
         } catch (error: any) {
             console.error('Login Error:', error);
-            Alert.alert('Login Failed', error.response?.data?.message || 'Invalid credentials');
+            showToast(error.response?.data?.message || 'Invalid credentials', 'error', { title: 'Login Failed' });
         } finally {
             setLoading(false);
         }
@@ -49,73 +52,77 @@ export default function LoginScreen({ navigation }: Props) {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
             >
-                <View style={styles.headerContainer}>
-                    <Image
-                        source={require('../../assets/logo.jpeg')}
-                        style={styles.logo}
-                        resizeMode="contain"
-                    />
-                    <Text style={styles.appName}>Munawwara Care</Text>
-                    <Text style={styles.welcomeText}>Welcome Back</Text>
-                    <Text style={styles.subText}>Sign in to continue tracking your group</Text>
-                </View>
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                    <View style={{ flex: 1 }}>
+                        <View style={styles.headerContainer}>
+                            <Image
+                                source={require('../../assets/logo.jpeg')}
+                                style={styles.logo}
+                                resizeMode="contain"
+                            />
+                            <Text style={styles.appName}>Munawwara Care</Text>
+                            <Text style={styles.welcomeText}>Welcome Back</Text>
+                            <Text style={styles.subText}>Sign in to continue tracking your group</Text>
+                        </View>
 
-                <View style={styles.formContainer}>
-                    <View style={styles.inputWrapper}>
-                        <Text style={styles.label}>Email</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="name@example.com"
-                            placeholderTextColor="#999"
-                            value={email}
-                            onChangeText={setEmail}
-                            autoCapitalize="none"
-                            keyboardType="email-address"
-                        />
+                        <View style={styles.formContainer}>
+                            <View style={styles.inputWrapper}>
+                                <Text style={styles.label}>Email</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="name@example.com"
+                                    placeholderTextColor="#999"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    autoCapitalize="none"
+                                    keyboardType="email-address"
+                                />
+                            </View>
+
+                            <View style={styles.inputWrapper}>
+                                <Text style={styles.label}>Password</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="••••••••"
+                                    placeholderTextColor="#999"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry
+                                />
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.loginButton, loading && styles.buttonDisabled]}
+                                onPress={handleLogin}
+                                disabled={loading}
+                            >
+                                <Text style={styles.loginButtonText}>{loading ? 'Signing In...' : 'Sign In'}</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.divider}>
+                                <View style={styles.line} />
+                                <Text style={styles.dividerText}>or continue with</Text>
+                                <View style={styles.line} />
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.googleButton}
+                                onPress={() => showToast('Google Sign-In requires Client IDs setup.', 'info', { title: 'Coming Soon' })}
+                            >
+                                <Text style={styles.googleButtonText}>G</Text>
+                                <Text style={styles.googleText}>Sign in with Google</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.footer}>
+                                <Text style={styles.footerText}>Don't have an account? </Text>
+                                <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+                                    <Text style={styles.signUpText}>Sign Up</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
                     </View>
-
-                    <View style={styles.inputWrapper}>
-                        <Text style={styles.label}>Password</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="••••••••"
-                            placeholderTextColor="#999"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                        />
-                    </View>
-
-                    <TouchableOpacity
-                        style={[styles.loginButton, loading && styles.buttonDisabled]}
-                        onPress={handleLogin}
-                        disabled={loading}
-                    >
-                        <Text style={styles.loginButtonText}>{loading ? 'Signing In...' : 'Sign In'}</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.divider}>
-                        <View style={styles.line} />
-                        <Text style={styles.dividerText}>or continue with</Text>
-                        <View style={styles.line} />
-                    </View>
-
-                    <TouchableOpacity
-                        style={styles.googleButton}
-                        onPress={() => Alert.alert('Coming Soon', 'Google Sign-In requires Client IDs setup.')}
-                    >
-                        <Text style={styles.googleButtonText}>G</Text>
-                        <Text style={styles.googleText}>Sign in with Google</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.footer}>
-                        <Text style={styles.footerText}>Don't have an account? </Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-                            <Text style={styles.signUpText}>Sign Up</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
+                </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -124,7 +131,7 @@ export default function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8F9FA', // Light gray background for premium feel
+        backgroundColor: '#F8F9FA',
     },
     keyboardView: {
         flex: 1,
@@ -149,7 +156,7 @@ const styles = StyleSheet.create({
     },
     welcomeText: {
         fontSize: 28,
-        fontWeight: '800', // Extra bold
+        fontWeight: '800',
         color: '#1A1A1A',
         marginBottom: 8,
     },
@@ -187,7 +194,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     loginButton: {
-        backgroundColor: '#007AFF', // Primary Blue
+        backgroundColor: '#007AFF',
         borderRadius: 12,
         paddingVertical: 16,
         alignItems: 'center',
@@ -242,7 +249,7 @@ const styles = StyleSheet.create({
     googleButtonText: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#EA4335', // Google Red
+        color: '#EA4335',
         marginRight: 10,
     },
     googleText: {
