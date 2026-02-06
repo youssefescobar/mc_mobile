@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,6 +9,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useToast } from '../components/ToastContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 
+import ComposeMessageModal from '../components/ComposeMessageModal';
+import { Ionicons } from '@expo/vector-icons';
+
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupDetails'>;
 
 export default function GroupDetailsScreen({ route, navigation }: Props) {
@@ -15,6 +19,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const [pilgrims, setPilgrims] = useState<Pilgrim[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showBroadcastModal, setShowBroadcastModal] = useState(false);
     const { showToast } = useToast();
 
     // Add Pilgrim Form State
@@ -26,7 +31,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const fetchGroupDetails = async () => {
         try {
             setLoading(true);
-            const response = await api.get(`/groups/${groupId}`);
+            const response = await api.get(`/ groups / ${groupId} `);
             // Backend returns group object directly for single group
             if (response.data) {
                 setPilgrims(response.data.pilgrims || []);
@@ -51,7 +56,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
 
         setAdding(true);
         try {
-            const response = await api.post(`/groups/${groupId}/add-pilgrim`, {
+            const response = await api.post(`/ groups / ${groupId}/add-pilgrim`, {
                 full_name: newPilgrimName,
                 national_id: newPilgrimNationalId,
                 phone_number: newPilgrimPhone,
@@ -106,6 +111,31 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         }
     };
 
+    // Invite Pilgrim State
+    const [showInvitePilgrimModal, setShowInvitePilgrimModal] = useState(false);
+    const [invitePilgrimEmail, setInvitePilgrimEmail] = useState('');
+    const [invitingPilgrim, setInvitingPilgrim] = useState(false);
+
+    const handleInvitePilgrim = async () => {
+        if (!invitePilgrimEmail) {
+            showToast('Please enter an email address', 'error');
+            return;
+        }
+
+        setInvitingPilgrim(true);
+        try {
+            await api.post(`/groups/${groupId}/invite-pilgrim`, { email: invitePilgrimEmail });
+            showToast('Pilgrim invitation sent successfully', 'success');
+            setShowInvitePilgrimModal(false);
+            setInvitePilgrimEmail('');
+        } catch (error: any) {
+            console.error('Invite pilgrim error:', error);
+            showToast(error.response?.data?.message || 'Failed to send invitation', 'error');
+        } finally {
+            setInvitingPilgrim(false);
+        }
+    };
+
     const handleRemovePilgrim = (pilgrimId: string, pilgrimName: string) => {
         setSelectedPilgrim({ id: pilgrimId, name: pilgrimName });
         setShowDeletePilgrimModal(true);
@@ -144,35 +174,42 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         }
     };
 
+    // Action Menu State
+    const [showActionMenu, setShowActionMenu] = useState(false);
+
+    // ... (rest of logic) ...
+
     return (
         <View style={styles.container}>
             <SafeAreaView style={styles.header} edges={['top']}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Text style={styles.backButtonText}>←</Text>
+                    <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{groupName}</Text>
-                <View style={{ width: 40 }} />
+                <View style={{ width: 32 }} />
             </SafeAreaView>
 
             <View style={styles.content}>
-                <View style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>Total Pilgrims</Text>
-                    <Text style={styles.summaryCount}>{pilgrims.length}</Text>
+
+                {/* Stats Row */}
+                <View style={styles.statsRow}>
+                    <Text style={styles.statsLabel}>Total Pilgrims</Text>
+                    <Text style={styles.statsCount}>{pilgrims.length}</Text>
                 </View>
 
+                {/* Minimal Section Header */}
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Pilgrim List</Text>
-                    <TouchableOpacity onPress={() => setShowInviteModal(true)}>
-                        <Text style={styles.inviteLink}>+ Invite Moderator</Text>
-                    </TouchableOpacity>
+                    {/* Actions moved to FAB */}
                 </View>
 
                 {loading ? (
-                    <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
+                    <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 20 }} />
                 ) : (
                     <FlatList
                         data={pilgrims}
                         keyExtractor={item => item._id}
+                        showsVerticalScrollIndicator={false}
                         renderItem={({ item }) => (
                             <View style={styles.pilgrimCard}>
                                 <View style={styles.pilgrimInfo}>
@@ -184,7 +221,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                         <Text style={styles.pilgrimId}>ID: {item.national_id}</Text>
                                         {item.location && (
                                             <View style={styles.statusIndicator}>
-                                                <View style={[styles.statusDot, { backgroundColor: '#4CD964' }]} />
+                                                <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
                                                 <Text style={styles.statusText}>Online</Text>
                                             </View>
                                         )}
@@ -194,7 +231,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                     onPress={() => handleRemovePilgrim(item._id, item.full_name)}
                                     style={styles.deletePilgrimButton}
                                 >
-                                    <Text style={styles.deletePilgrimText}>✕</Text>
+                                    <Ionicons name="close-circle-outline" size={22} color="#CBD5E1" />
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -212,18 +249,82 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 )}
             </View>
 
+            {/* FAB triggers Action Menu */}
             <TouchableOpacity
                 style={styles.fab}
-                onPress={() => setShowAddModal(true)}
+                onPress={() => setShowActionMenu(true)}
             >
-                <Text style={styles.fabText}>+</Text>
+                <Ionicons name="add" size={30} color="white" />
             </TouchableOpacity>
 
+            {/* Action Menu Modal (Bottom Sheet Style) */}
+            <Modal
+                visible={showActionMenu}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowActionMenu(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowActionMenu(false)}
+                >
+                    <View style={styles.actionSheetContent}>
+                        <Text style={styles.actionSheetTitle}>Group Options</Text>
+
+                        <TouchableOpacity
+                            style={styles.actionOption}
+                            onPress={() => { setShowActionMenu(false); setShowBroadcastModal(true); }}
+                        >
+                            <Ionicons name="megaphone-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
+                            <Text style={styles.actionOptionText}>Broadcast Message</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.actionOption}
+                            onPress={() => { setShowActionMenu(false); setShowInvitePilgrimModal(true); }}
+                        >
+                            <Ionicons name="mail-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
+                            <Text style={styles.actionOptionText}>Invite Pilgrim via Email</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.actionOption}
+                            onPress={() => { setShowActionMenu(false); setShowInviteModal(true); }}
+                        >
+                            <Ionicons name="shield-checkmark-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
+                            <Text style={styles.actionOptionText}>Invite Moderator</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.actionOption}
+                            onPress={() => { setShowActionMenu(false); setShowAddModal(true); }}
+                        >
+                            <Ionicons name="person-add-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
+                            <Text style={styles.actionOptionText}>Manually Add Pilgrim</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.cancelOption}
+                            onPress={() => setShowActionMenu(false)}
+                        >
+                            <Text style={styles.cancelOptionText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            <ComposeMessageModal
+                visible={showBroadcastModal}
+                onClose={() => setShowBroadcastModal(false)}
+                groupId={groupId}
+                onSuccess={() => showToast('Message broadcasted successfully', 'success')}
+            />
             {/* Add Pilgrim Modal */}
             <Modal
                 visible={showAddModal}
-                animationType="slide"
                 transparent={true}
+                animationType="slide"
                 onRequestClose={() => setShowAddModal(false)}
             >
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
@@ -331,6 +432,43 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {/* Invite Pilgrim Modal */}
+            <Modal
+                visible={showInvitePilgrimModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowInvitePilgrimModal(false)}
+            >
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+                    <View style={styles.modalContentSmall}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Invite Pilgrim</Text>
+                            <TouchableOpacity onPress={() => setShowInvitePilgrimModal(false)}>
+                                <Text style={styles.closeText}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.label}>Pilgrim's Email Address</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="pilgrim@example.com"
+                            value={invitePilgrimEmail}
+                            onChangeText={setInvitePilgrimEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+
+                        <TouchableOpacity
+                            style={[styles.addButton, invitingPilgrim && styles.buttonDisabled]}
+                            onPress={handleInvitePilgrim}
+                            disabled={invitingPilgrim}
+                        >
+                            <Text style={styles.addButtonText}>{invitingPilgrim ? "Sending..." : "Send Invitation"}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </View >
     );
 }
@@ -338,72 +476,182 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F8F9FA', // Professional light grey
     },
     header: {
         backgroundColor: 'white',
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingBottom: 15,
-        paddingTop: 10,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        paddingTop: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: '#EEF0F2',
     },
     backButton: {
-        padding: 5,
+        padding: 4,
     },
     backButtonText: {
         fontSize: 24,
-        color: '#007AFF',
+        color: '#1A1A1A', // Darker, less "link-blue"
+        fontWeight: '300',
     },
     headerTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1A1A1A',
+        letterSpacing: 0.5,
     },
     content: {
         flex: 1,
-        padding: 20,
+        paddingHorizontal: 20,
+        paddingTop: 24,
     },
-    summaryCard: {
-        backgroundColor: 'white',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 20,
+    statsRow: {
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: 'white',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        marginBottom: 24,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
-        shadowRadius: 3,
+        shadowRadius: 2,
         elevation: 2,
+        borderWidth: 1,
+        borderColor: '#F0F0F0',
     },
-    summaryLabel: {
-        color: '#666',
-        fontSize: 14,
-        marginBottom: 5,
+    statsLabel: {
+        fontSize: 15,
+        color: '#64748B', // Slate 500
+        fontWeight: '500',
     },
-    summaryCount: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#007AFF',
+    statsCount: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#0F172A', // Slate 900
     },
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 15,
+        marginBottom: 16,
+        paddingHorizontal: 4,
     },
     sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    inviteLink: {
         fontSize: 14,
-        color: '#007AFF',
+        fontWeight: '700',
+        color: '#94A3B8', // Slate 400 - Uppercase style label
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    pilgrimCard: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#F1F5F9', // Very subtle border
+    },
+    pilgrimInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    avatarSmall: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: '#F1F5F9', // Slate 100
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    avatarTextSmall: {
+        fontSize: 16,
         fontWeight: '600',
+        color: '#475569', // Slate 600
+    },
+    pilgrimName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1E293B', // Slate 800
+        marginBottom: 2,
+    },
+    pilgrimId: {
+        fontSize: 13,
+        color: '#94A3B8', // Slate 400
+    },
+    statusIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    statusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginRight: 6,
+    },
+    statusText: {
+        fontSize: 12,
+        color: '#64748B',
+    },
+    deletePilgrimButton: {
+        padding: 8,
+        marginLeft: 8,
+    },
+    deletePilgrimText: {
+        fontSize: 18,
+        color: '#CBD5E1', // Very subtle X, turns red on action if needed, but keeping it neutral until pressed helps minimalism
+    },
+    emptyText: {
+        textAlign: 'center',
+        color: '#94A3B8',
+        marginTop: 40,
+        fontSize: 15,
+    },
+    fab: {
+        position: 'absolute',
+        bottom: 32,
+        right: 24,
+        backgroundColor: '#2563EB', // Blue 600
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 6,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+    },
+    fabText: {
+        color: 'white',
+        fontSize: 32,
+        marginTop: -4,
+        fontWeight: '300',
+    },
+    // Modal & Sheet Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.4)', // Slate 900 with opacity
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        height: '85%', // Taller for add form
     },
     modalContentSmall: {
         backgroundColor: 'white',
@@ -411,175 +659,108 @@ const styles = StyleSheet.create({
         padding: 24,
         width: '90%',
         alignSelf: 'center',
+        marginBottom: 'auto',
+        marginTop: 'auto',
     },
-    pilgrimCard: {
+    // Action Sheet Specific
+    actionSheetContent: {
         backgroundColor: 'white',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 10,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    pilgrimInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    avatarSmall: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#E3F2FD',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    avatarTextSmall: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#007AFF',
-    },
-    pilgrimName: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-    },
-    pilgrimId: {
-        fontSize: 12,
-        color: '#999',
-    },
-    statusIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    statusDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginRight: 6,
-    },
-    statusText: {
-        fontSize: 12,
-        color: '#666',
-    },
-    emptyText: {
-        textAlign: 'center',
-        color: '#999',
-        marginTop: 20,
-    },
-    fab: {
-        position: 'absolute',
-        bottom: 30,
-        right: 20,
-        backgroundColor: '#007AFF',
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 8,
-        shadowColor: '#007AFF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 5,
-    },
-    fabText: {
-        color: 'white',
-        fontSize: 32,
-        marginTop: -4,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
-    },
-    modalContent: {
-        backgroundColor: 'white',
-        borderTopLeftRadius: 25,
-        borderTopRightRadius: 25,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         padding: 24,
-        height: '70%',
+        paddingBottom: 40,
     },
+    actionSheetTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1E293B',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    actionOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    actionOptionIcon: {
+        marginRight: 16,
+        // Assuming Ionicons are used here
+    },
+    actionOptionText: {
+        fontSize: 16,
+        color: '#334155', // Slate 700
+        fontWeight: '500',
+    },
+    cancelOption: {
+        marginTop: 16,
+        paddingVertical: 16,
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+    },
+    cancelOptionText: {
+        fontSize: 16,
+        color: '#64748B',
+        fontWeight: '600',
+    },
+    // Form Inputs
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 32,
     },
     modalTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#0F172A',
     },
     closeText: {
         fontSize: 24,
-        color: '#999',
+        color: '#94A3B8',
     },
     label: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#333',
+        color: '#475569',
         marginBottom: 8,
-        marginTop: 10,
+        marginTop: 16,
     },
     input: {
-        backgroundColor: '#f9f9f9',
+        backgroundColor: '#F8FAFC',
         borderRadius: 12,
-        padding: 14,
+        padding: 16,
         fontSize: 16,
-        color: '#333',
+        color: '#0F172A',
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: '#E2E8F0',
     },
     addButton: {
-        backgroundColor: '#007AFF',
+        backgroundColor: '#2563EB',
         borderRadius: 12,
-        paddingVertical: 16,
+        paddingVertical: 18,
         alignItems: 'center',
-        marginTop: 30,
-        marginBottom: 40,
+        marginTop: 40,
+        marginBottom: 20,
     },
     buttonDisabled: {
-        backgroundColor: '#A0C4FF',
+        backgroundColor: '#93C5FD',
     },
     addButtonText: {
         color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    deletePilgrimButton: {
-        marginLeft: 8,
-        backgroundColor: '#FFEBEE',
-        borderRadius: 16,
-        width: 32,
-        height: 32,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    deletePilgrimText: {
-        fontSize: 14,
-        color: '#FF3B30',
-        fontWeight: 'bold',
-        marginTop: -2, // Micro-adjustment to visually center the X
+        fontSize: 16,
+        fontWeight: '700',
     },
     deleteGroupButton: {
-        backgroundColor: '#FFE5E5',
-        borderRadius: 12,
+        marginTop: 40,
         paddingVertical: 16,
         alignItems: 'center',
-        marginTop: 20,
-        marginBottom: 40,
-        borderWidth: 1,
-        borderColor: '#FF3B30',
     },
     deleteGroupText: {
-        color: '#FF3B30',
-        fontSize: 16,
-        fontWeight: 'bold',
+        color: '#EF4444', // Red 500
+        fontSize: 15,
+        fontWeight: '600',
     },
 });

@@ -33,7 +33,9 @@ export default function LoginScreen({ navigation }: Props) {
             setAuthToken(token);
 
             // Navigate directly - no need for success toast
-            if (role === 'moderator') {
+            if (role === 'admin') {
+                navigation.replace('AdminDashboard', { userId: user_id });
+            } else if (role === 'moderator') {
                 navigation.replace('ModeratorDashboard', { userId: user_id });
             } else {
                 navigation.replace('PilgrimDashboard', { userId: user_id });

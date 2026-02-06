@@ -33,16 +33,11 @@ export default function CreateGroupScreen({ navigation }: Props) {
             });
 
             if (response.data && response.data._id) {
-                showToast(
-                    `"${response.data.group_name}" has been created successfully.`,
-                    'success',
-                    {
-                        title: 'Group Created!',
-                        actionLabel: 'View',
-                        onAction: () => navigation.goBack()
-                    }
-                );
-                setTimeout(() => navigation.goBack(), 1500);
+                // Direct redirect as requested - no toast
+                navigation.replace('GroupDetails', {
+                    groupId: response.data._id,
+                    groupName: response.data.group_name
+                });
             }
         } catch (error: any) {
             console.error(error);

@@ -6,8 +6,13 @@ import { RootStackParamList } from '../navigation/types';
 import { api, setAuthToken, BASE_URL } from '../services/api';
 import Map from '../components/Map';
 import { Group, Pilgrim } from '../types';
-import { SafeAreaView } from 'react-native-safe-area-context';
+
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Swipeable } from 'react-native-gesture-handler';
+import { useToast } from '../components/ToastContext';
+import * as Location from 'expo-location';
+import * as Battery from 'expo-battery';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ModeratorDashboard'>;
 
@@ -25,9 +30,10 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
     const [loading, setLoading] = useState(true);
     const [allPilgrims, setAllPilgrims] = useState<Pilgrim[]>([]);
     const [isMapVisible, setIsMapVisible] = useState(true);
-    const [showProfile, setShowProfile] = useState(false);
     const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [showProfile, setShowProfile] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const { showToast } = useToast();
 
     const fetchNotifications = async () => {
         try {
@@ -71,18 +77,95 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
         }
     };
 
-    // Refresh data when screen comes into focus (e.g., after creating a group)
+    // Location Tracking
+    const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
+
+    const setupLocationTracking = async () => {
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') return;
+
+            // Get initial battery
+            const level = await Battery.getBatteryLevelAsync();
+            setBatteryLevel(Math.round(level * 100));
+
+            // Start watching position
+            await Location.watchPositionAsync(
+                {
+                    accuracy: Location.Accuracy.High,
+                    timeInterval: 60000, // Update every minute
+                    distanceInterval: 50, // OR every 50 meters
+                },
+                async (location) => {
+                    try {
+                        const battery = await Battery.getBatteryLevelAsync();
+                        await api.put('/auth/location', {
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude,
+                            battery: Math.round(battery * 100)
+                        });
+                        console.log('Moderator location updated');
+                    } catch (error) {
+                        console.log('Failed to update location');
+                    }
+                }
+            );
+        } catch (e) {
+            console.log('Error setting up location tracking');
+        }
+    };
+
+    // Refresh data when screen comes into focus
     useFocusEffect(
         useCallback(() => {
             fetchGroups();
             fetchProfile();
             fetchNotifications();
+            setupLocationTracking(); // Start tracking
         }, [])
     );
 
     const handleLogout = async () => {
         setAuthToken(null);
         navigation.replace('Login');
+    };
+
+    const handleDeleteGroup = async (groupId: string, groupName: string) => {
+        Alert.alert(
+            "Delete Group",
+            `Are you sure you want to delete "${groupName}"?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await api.delete(`/groups/${groupId}`);
+                            showToast(`${groupName} deleted`, 'success');
+                            fetchGroups(); // Refresh list
+                        } catch (error: any) {
+                            showToast('Failed to delete group', 'error');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const renderRightActions = (groupId: string, groupName: string, close: () => void) => {
+        return (
+            <TouchableOpacity
+                style={styles.deleteAction}
+                onPress={() => {
+                    close();
+                    handleDeleteGroup(groupId, groupName);
+                }}
+            >
+                <Ionicons name="trash-outline" size={24} color="white" />
+                <Text style={styles.deleteActionText}>Delete</Text>
+            </TouchableOpacity>
+        );
     };
 
     const mapMarkers = allPilgrims
@@ -210,18 +293,24 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                         data={groups}
                         keyExtractor={item => item._id}
                         renderItem={({ item }) => (
-                            <TouchableOpacity
-                                style={styles.groupCard}
-                                onPress={() => navigation.navigate('GroupDetails', { groupId: item._id, groupName: item.group_name })}
+                            <Swipeable
+                                renderRightActions={(progress, dragX, ref) =>
+                                    renderRightActions(item._id, item.group_name, ref?.close || (() => { }))
+                                }
                             >
-                                <View>
-                                    <Text style={styles.groupName}>{item.group_name}</Text>
-                                    <Text style={styles.groupDate}>Created: {new Date(item.created_at).toLocaleDateString()}</Text>
-                                </View>
-                                <View style={styles.pilgrimCountBadge}>
-                                    <Text style={styles.pilgrimCountText}>{item.pilgrims?.length || 0}</Text>
-                                </View>
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.groupCard}
+                                    onPress={() => navigation.navigate('GroupDetails', { groupId: item._id, groupName: item.group_name })}
+                                >
+                                    <View>
+                                        <Text style={styles.groupName}>{item.group_name}</Text>
+                                        <Text style={styles.groupDate}>Created: {new Date(item.created_at).toLocaleDateString()}</Text>
+                                    </View>
+                                    <View style={styles.pilgrimCountBadge}>
+                                        <Text style={styles.pilgrimCountText}>{item.pilgrims?.length || 0}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </Swipeable>
                         )}
                         refreshing={loading}
                         onRefresh={() => { fetchGroups(); fetchProfile(); }}
@@ -453,6 +542,22 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#333',
         marginBottom: 4,
+    },
+    deleteAction: {
+        backgroundColor: '#EF4444',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        marginVertical: 0, // Match exact height without extra margin
+        borderRadius: 12,
+        marginLeft: 10,
+        marginBottom: 12, // Match the card's bottom margin
+    },
+    deleteActionText: {
+        color: 'white',
+        fontWeight: '600',
+        fontSize: 12,
+        marginTop: 4,
     },
     groupDate: {
         fontSize: 12,

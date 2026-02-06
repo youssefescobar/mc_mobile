@@ -3,6 +3,7 @@
     "name": "mc_mobile",
     "slug": "mc_mobile",
     "version": "1.0.0",
+    "scheme": "mc_mobile",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

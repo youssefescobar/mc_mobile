@@ -108,6 +108,10 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                     </View>
                 </View>
 
+                <TouchableOpacity style={styles.actionButton} onPress={() => handleRequestModerator()}>
+                    <Text style={styles.actionButtonText}>Request to be Moderator</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                     <Text style={styles.logoutText}>Log Out</Text>
                 </TouchableOpacity>
@@ -115,6 +119,27 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
         </SafeAreaView>
     );
 }
+
+const handleRequestModerator = async () => {
+    Alert.alert(
+        'Request Moderator Access',
+        'Do you want to request to become a moderator? An admin will review your request.',
+        [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Request',
+                onPress: async () => {
+                    try {
+                        await api.post('/admin/request-moderator');
+                        Alert.alert('Success', 'Your request has been submitted.');
+                    } catch (error: any) {
+                        Alert.alert('Error', error.response?.data?.message || 'Failed to submit request');
+                    }
+                }
+            }
+        ]
+    );
+};
 
 const InfoRow = ({ label, value, last }: { label: string, value?: string, last?: boolean }) => (
     <View style={[styles.infoRow, last && styles.noBorder]}>
@@ -258,6 +283,21 @@ const styles = StyleSheet.create({
     },
     logoutText: {
         color: '#FF3B30',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    actionButton: {
+        backgroundColor: 'white',
+        paddingVertical: 16,
+        borderRadius: 14,
+        alignItems: 'center',
+        marginTop: 10,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#007AFF',
+    },
+    actionButtonText: {
+        color: '#007AFF',
         fontSize: 16,
         fontWeight: 'bold',
     },

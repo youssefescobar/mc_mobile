@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import { useToast } from '../components/ToastContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PilgrimDashboard'>;
 
@@ -18,11 +19,14 @@ interface GroupInfo {
         _id: string;
         full_name: string;
         phone_number: string;
+        current_latitude?: number;
+        current_longitude?: number;
     }[];
 }
 
 export default function PilgrimDashboard({ navigation, route }: Props) {
-    const [isSharingLocation, setIsSharingLocation] = useState(true);
+    // Location sharing is now always-on
+    const isSharingLocation = true;
     const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
     const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
     const [sosActive, setSosActive] = useState(false);
@@ -117,6 +121,13 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         }
     };
 
+    const getBatteryIcon = (level: number | null) => {
+        if (level === null) return 'battery-dead';
+        if (level >= 90) return 'battery-full';
+        if (level >= 50) return 'battery-half';
+        return 'battery-dead';
+    };
+
     return (
         <View style={styles.container}>
             {/* Header */}
@@ -127,14 +138,26 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                         style={styles.profileButton}
                         onPress={() => navigation.navigate('PilgrimProfile', { userId: route.params.userId })}
                     >
-                        <Text style={styles.profileIcon}>👤</Text>
+                        <Ionicons name="person-circle-outline" size={32} color="#1E293B" />
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
 
             {/* Map */}
             <View style={styles.mapContainer}>
-                <Map onLocationUpdate={handleLocationUpdate} />
+                <Map
+                    onLocationUpdate={handleLocationUpdate}
+                    markers={groupInfo?.moderators
+                        .filter(m => m.current_latitude !== undefined && m.current_longitude !== undefined)
+                        .map(m => ({
+                            id: m._id,
+                            latitude: m.current_latitude!,
+                            longitude: m.current_longitude!,
+                            title: `Moderator: ${m.full_name}`,
+                            description: 'Track your group leader'
+                        })) || []
+                    }
+                />
             </View>
 
             {/* Overlays */}
@@ -142,29 +165,33 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
                 {/* Status Cards Row */}
                 <View style={styles.statusRow}>
-                    {/* Location Toggle */}
+                    {/* Location Status (Always On) */}
                     <View style={styles.card}>
                         <View style={styles.cardHeader}>
-                            <Text style={styles.cardLabel}>Location Sharing</Text>
-                            <Switch
-                                value={isSharingLocation}
-                                onValueChange={setIsSharingLocation}
-                                trackColor={{ false: "#767577", true: "#34C759" }}
-                            />
+                            <View style={styles.cardIconRow}>
+                                <Ionicons name="location-outline" size={20} color="#64748B" />
+                                <Text style={styles.cardLabel}>Location</Text>
+                            </View>
+                            <Ionicons name="radio-button-on" size={18} color="#10B981" />
                         </View>
-                        <Text style={[styles.statusText, { color: isSharingLocation ? '#34C759' : '#FF3B30' }]}>
-                            {isSharingLocation ? 'Active' : 'Disabled'}
+                        <Text style={[styles.statusText, { color: '#10B981' }]}>
+                            Always Active
                         </Text>
                     </View>
 
                     {/* Battery Status */}
                     <View style={styles.card}>
-                        <Text style={styles.cardLabel}>Battery</Text>
+                        <View style={styles.cardHeader}>
+                            <View style={styles.cardIconRow}>
+                                <Ionicons name={getBatteryIcon(batteryLevel)} size={20} color="#64748B" />
+                                <Text style={styles.cardLabel}>Battery</Text>
+                            </View>
+                        </View>
                         <View style={styles.batteryContainer}>
                             <Text style={styles.batteryText}>{batteryLevel !== null ? `${batteryLevel}%` : '--'}</Text>
                             <View style={[
                                 styles.batteryIndicator,
-                                { backgroundColor: (batteryLevel || 100) < 20 ? '#FF3B30' : '#34C759' }
+                                { backgroundColor: (batteryLevel || 100) < 20 ? '#EF4444' : '#10B981' }
                             ]} />
                         </View>
                     </View>
@@ -173,9 +200,28 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                 {/* Group Info */}
                 {groupInfo && (
                     <View style={styles.groupCard}>
-                        <Text style={styles.groupLabel}>My Group</Text>
+                        <View style={styles.groupHeaderRow}>
+                            <Ionicons name="people-outline" size={20} color="#64748B" style={{ marginRight: 8 }} />
+                            <Text style={styles.groupLabel}>My Group</Text>
+                        </View>
+
                         <Text style={styles.groupName}>{groupInfo.group_name}</Text>
-                        <Text style={styles.moderatorLabel}>Moderator: {groupInfo.moderators[0]?.full_name || 'Assigned'}</Text>
+
+                        <View style={styles.moderatorRow}>
+                            <Ionicons name="shield-checkmark-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
+                            <Text style={styles.moderatorLabel}>Moderator: <Text style={{ fontWeight: '600', color: '#334155' }}>{groupInfo.moderators[0]?.full_name || 'Assigned'}</Text></Text>
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.messageButton}
+                            onPress={() => navigation.navigate('PilgrimMessagesScreen', {
+                                groupId: groupInfo.group_id,
+                                groupName: groupInfo.group_name
+                            })}
+                        >
+                            <Ionicons name="chatbubbles-outline" size={20} color="#2563EB" style={{ marginRight: 8 }} />
+                            <Text style={styles.messageButtonText}>Broadcasts & Updates</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
 
@@ -186,6 +232,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                             styles.sosButton,
                             sosActive && { transform: [{ scale: pulseAnim }] }
                         ]}>
+                            <Ionicons name="alert-circle" size={32} color="white" />
                             <Text style={styles.sosText}>SOS</Text>
                             <Text style={styles.sosSubtext}>EMERGENCY</Text>
                         </Animated.View>
@@ -205,11 +252,8 @@ const styles = StyleSheet.create({
     header: {
         backgroundColor: 'white',
         zIndex: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 3,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
     },
     headerContent: {
         flexDirection: 'row',
@@ -217,23 +261,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingBottom: 16,
-        paddingTop: 8,
+        paddingTop: 12,
     },
     headerTitle: {
-        fontSize: 22,
-        fontWeight: '800',
-        color: '#333',
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#0F172A', // Slate 900
+        letterSpacing: -0.5,
     },
     profileButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#F0F0F0',
+        backgroundColor: '#F1F5F9', // Slate 100
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    profileIcon: {
-        fontSize: 20,
     },
     mapContainer: {
         flex: 1,
@@ -245,110 +287,150 @@ const styles = StyleSheet.create({
         right: 0,
         padding: 20,
         paddingBottom: 40,
-        pointerEvents: 'box-none', // Allow clicks to pass through empty areas
+        pointerEvents: 'box-none',
     },
     statusRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         marginBottom: 16,
+        gap: 12, // Gap between cards
     },
     card: {
         backgroundColor: 'white',
         borderRadius: 16,
         padding: 16,
-        width: '48%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        flex: 1, // Use flex instead of width % for better gap handling
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowRadius: 10,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         marginBottom: 8,
+    },
+    cardIconRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 4,
     },
     cardLabel: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#666',
+        color: '#64748B', // Slate 500
         textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     statusText: {
-        fontSize: 16,
-        fontWeight: 'bold',
+        fontSize: 15,
+        fontWeight: '700',
+        marginTop: 4,
     },
     batteryContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between', // Push dot to end
         marginTop: 4,
     },
     batteryText: {
         fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-        marginRight: 8,
+        fontWeight: '800',
+        color: '#1E293B', // Slate 800
     },
     batteryIndicator: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
     },
     groupCard: {
         backgroundColor: 'white',
         borderRadius: 16,
-        padding: 16,
+        padding: 20,
         marginBottom: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowRadius: 10,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+    },
+    groupHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6,
     },
     groupLabel: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#666',
-        marginBottom: 4,
+        color: '#64748B',
         textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     groupName: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 4,
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#0F172A',
+        marginBottom: 8,
+    },
+    moderatorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
     },
     moderatorLabel: {
         fontSize: 14,
-        color: '#666',
+        color: '#64748B',
+    },
+    messageButton: {
+        backgroundColor: '#EFF6FF', // Blue 50
+        padding: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#BFDBFE', // Blue 200
+    },
+    messageButtonText: {
+        color: '#2563EB', // Blue 600
+        fontWeight: '600',
+        fontSize: 14,
     },
     sosContainer: {
         alignItems: 'center',
     },
     sosButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: '#FF3B30',
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#EF4444', // Red 500
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#FF3B30',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
         elevation: 8,
         borderWidth: 4,
-        borderColor: 'white',
+        borderColor: '#FEE2E2', // Red 100 ring
     },
     sosText: {
         color: 'white',
-        fontSize: 20,
+        fontSize: 16,
         fontWeight: '900',
+        marginTop: -2,
     },
     sosSubtext: {
-        color: 'white',
-        fontSize: 8,
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 7,
         fontWeight: '700',
+        letterSpacing: 0.5,
     },
 });

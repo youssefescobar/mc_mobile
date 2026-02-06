@@ -9,4 +9,7 @@ export type RootStackParamList = {
     ModeratorDashboard: { userId: string };
     Notifications: undefined;
     EditProfile: undefined;
+    AdminDashboard: { userId: string };
+    PilgrimSignUp: { token: string };
+    PilgrimMessagesScreen: { groupId: string; groupName: string };
 };
