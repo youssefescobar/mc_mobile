@@ -9,6 +9,7 @@ import * as Battery from 'expo-battery';
 import { useToast } from '../components/ToastContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PilgrimDashboard'>;
 
@@ -57,6 +58,13 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
             // Cleanup subscription if needed
         };
     }, []);
+
+    // Refresh group info when screen comes into focus (e.g., after joining a group)
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchGroupInfo();
+        }, [])
+    );
 
     const fetchGroupInfo = async () => {
         try {
