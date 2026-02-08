@@ -8,6 +8,7 @@ import { Group, Pilgrim } from '../types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useToast } from '../components/ToastContext';
 import ConfirmationModal from '../components/ConfirmationModal';
+import GroupCodeModal from '../components/GroupCodeModal';
 
 import ComposeMessageModal from '../components/ComposeMessageModal';
 import { Ionicons } from '@expo/vector-icons';
@@ -116,6 +117,9 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const [showInvitePilgrimModal, setShowInvitePilgrimModal] = useState(false);
     const [invitePilgrimEmail, setInvitePilgrimEmail] = useState('');
     const [invitingPilgrim, setInvitingPilgrim] = useState(false);
+
+    // Group Code Modal State
+    const [showGroupCodeModal, setShowGroupCodeModal] = useState(false);
 
     const handleInvitePilgrim = async () => {
         if (!invitePilgrimEmail) {
@@ -306,6 +310,14 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                         </TouchableOpacity>
 
                         <TouchableOpacity
+                            style={styles.actionOption}
+                            onPress={() => { setShowActionMenu(false); setShowGroupCodeModal(true); }}
+                        >
+                            <Ionicons name="qr-code-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
+                            <Text style={styles.actionOptionText}>View Group Code</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
                             style={styles.cancelOption}
                             onPress={() => setShowActionMenu(false)}
                         >
@@ -470,6 +482,14 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {/* Group Code Modal */}
+            <GroupCodeModal
+                visible={showGroupCodeModal}
+                onClose={() => setShowGroupCodeModal(false)}
+                groupId={groupId}
+                groupName={groupName}
+            />
         </View >
     );
 }
