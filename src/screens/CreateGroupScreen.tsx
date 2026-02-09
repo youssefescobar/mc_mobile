@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api } from '../services/api';
@@ -52,10 +52,16 @@ export default function CreateGroupScreen({ navigation }: Props) {
         <SafeAreaView style={styles.container} edges={['top']}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
+                style={styles.container}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
             >
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                    <View style={styles.content}>
+                    <ScrollView
+                        style={styles.scroll}
+                        contentContainerStyle={styles.content}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                    >
                         {/* Header */}
                         <View style={styles.header}>
                             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -100,7 +106,7 @@ export default function CreateGroupScreen({ navigation }: Props) {
                                 )}
                             </TouchableOpacity>
                         </View>
-                    </View>
+                    </ScrollView>
                 </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -113,8 +119,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#F8F9FA',
     },
     content: {
-        flex: 1,
+        flexGrow: 1,
         padding: 24,
+        paddingBottom: 32,
+    },
+    scroll: {
+        flex: 1,
+        backgroundColor: '#F8F9FA',
     },
     header: {
         marginBottom: 20,

@@ -1,5 +1,16 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import {
+    View,
+    Text,
+    TextInput,
+    StyleSheet,
+    TouchableOpacity,
+    Keyboard,
+    TouchableWithoutFeedback,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView
+} from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api } from '../services/api';
@@ -9,7 +20,11 @@ import { useToast } from '../components/ToastContext';
 type Props = NativeStackScreenProps<RootStackParamList, 'VerifyEmail'>;
 
 export default function VerifyEmailScreen({ route, navigation }: Props) {
-    const { email, isPilgrim } = route.params as { email: string, isPilgrim?: boolean };
+    const { email, isPilgrim, postVerifyAction } = route.params as {
+        email: string;
+        isPilgrim?: boolean;
+        postVerifyAction?: 'request-moderator';
+    };
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [resending, setResending] = useState(false);
@@ -26,6 +41,17 @@ export default function VerifyEmailScreen({ route, navigation }: Props) {
         setLoading(true);
         try {
             await api.post('/auth/verify-email', { code });
+
+            if (isPilgrim && postVerifyAction === 'request-moderator') {
+                try {
+                    await api.post('/auth/request-moderator');
+                    showToast('Moderator request submitted for review.', 'success', { title: 'Request Sent' });
+                } catch (error: any) {
+                    const message = error.response?.data?.message || 'Failed to submit moderator request';
+                    if (message.toLowerCase().includes('pending')) return;
+                    showToast(message, 'error', { title: 'Request Failed' });
+                }
+            }
 
             showToast(
                 'Your email has been verified.',
@@ -97,67 +123,84 @@ export default function VerifyEmailScreen({ route, navigation }: Props) {
 
     return (
         <SafeAreaView style={styles.container}>
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                <View style={styles.content}>
-                    <TouchableOpacity
-                        style={styles.innerContent}
-                        activeOpacity={1}
-                        onPress={() => inputRef.current?.focus()}
+            <KeyboardAvoidingView
+                style={styles.container}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+            >
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <ScrollView
+                        contentContainerStyle={styles.content}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
                     >
-                        <View style={styles.headerContainer}>
-                            <View style={styles.iconCircle}>
-                                <Text style={styles.iconText}>✉️</Text>
+                        <View style={styles.topBar}>
+                            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.topButton}>
+                                <Text style={styles.topButtonText}>Back</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={handleResend}
+                                disabled={resending || cooldown > 0}
+                                style={styles.topButton}
+                            >
+                                <Text style={[styles.topButtonText, (resending || cooldown > 0) && styles.topButtonDisabled]}>
+                                    {resending ? "Sending..." : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend"}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.innerContent}
+                            activeOpacity={1}
+                            onPress={() => inputRef.current?.focus()}
+                        >
+                            <View style={styles.headerContainer}>
+                                <View style={styles.iconCircle}>
+                                    <Text style={styles.iconText}>✉️</Text>
+                                </View>
+                                <Text style={styles.title}>Verify Email</Text>
+                                <Text style={styles.subtitle}>
+                                    We sent a code to{"\n"}
+                                    <Text style={styles.emailHighlight}>{email}</Text>
+                                </Text>
                             </View>
-                            <Text style={styles.title}>Verify Email</Text>
-                            <Text style={styles.subtitle}>
-                                We sent a code to{"\n"}
-                                <Text style={styles.emailHighlight}>{email}</Text>
-                            </Text>
-                        </View>
 
-                        <View style={styles.codeContainer}>
-                            {renderCodeBoxes()}
-                        </View>
+                            <View style={styles.codeContainer}>
+                                {renderCodeBoxes()}
+                            </View>
 
-                        <TextInput
-                            ref={inputRef}
-                            style={styles.hiddenInput}
-                            value={code}
-                            onChangeText={(text) => {
-                                const numeric = text.replace(/[^0-9]/g, '');
-                                if (numeric.length <= 6) setCode(numeric);
-                                if (numeric.length === 6) Keyboard.dismiss();
-                            }}
-                            keyboardType="number-pad"
-                            maxLength={6}
-                            autoFocus
-                        />
+                            <TextInput
+                                ref={inputRef}
+                                style={styles.hiddenInput}
+                                value={code}
+                                onChangeText={(text) => {
+                                    const numeric = text.replace(/[^0-9]/g, '');
+                                    if (numeric.length <= 6) setCode(numeric);
+                                    if (numeric.length === 6) Keyboard.dismiss();
+                                }}
+                                keyboardType="number-pad"
+                                maxLength={6}
+                                autoFocus
+                            />
 
-                        <TouchableOpacity
-                            style={[styles.button, (code.length !== 6 || loading) && styles.buttonDisabled]}
-                            onPress={handleVerify}
-                            disabled={code.length !== 6 || loading}
-                        >
-                            <Text style={styles.buttonText}>{loading ? "Verifying..." : "Verify Code"}</Text>
+                            <TouchableOpacity
+                                style={[styles.button, (code.length !== 6 || loading) && styles.buttonDisabled]}
+                                onPress={handleVerify}
+                                disabled={code.length !== 6 || loading}
+                            >
+                                <Text style={styles.buttonText}>{loading ? "Verifying..." : "Verify Code"}</Text>
+                            </TouchableOpacity>
+
+                            {/* Resend Button */}
+                            {!isPilgrim && (
+                                <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backButton}>
+                                    <Text style={styles.backText}>Back to Login</Text>
+                                </TouchableOpacity>
+                            )}
                         </TouchableOpacity>
-
-                        {/* Resend Button */}
-                        <TouchableOpacity
-                            onPress={handleResend}
-                            disabled={resending || cooldown > 0}
-                            style={styles.resendButton}
-                        >
-                            <Text style={[styles.resendText, (resending || cooldown > 0) && styles.resendTextDisabled]}>
-                                {resending ? "Sending..." : cooldown > 0 ? `Resend in ${cooldown}s` : "Didn't receive a code? Resend"}
-                            </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backButton}>
-                            <Text style={styles.backText}>Back to Login</Text>
-                        </TouchableOpacity>
-                    </TouchableOpacity>
-                </View>
-            </TouchableWithoutFeedback>
+                    </ScrollView>
+                </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
@@ -168,7 +211,27 @@ const styles = StyleSheet.create({
         backgroundColor: '#F8F9FA',
     },
     content: {
-        flex: 1,
+        flexGrow: 1,
+        paddingBottom: 24,
+    },
+    topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingTop: 8,
+    },
+    topButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 6,
+    },
+    topButtonText: {
+        color: '#007AFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    topButtonDisabled: {
+        color: '#999',
     },
     innerContent: {
         flex: 1,
@@ -267,18 +330,6 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 18,
         fontWeight: 'bold',
-    },
-    resendButton: {
-        padding: 10,
-        marginBottom: 10,
-    },
-    resendText: {
-        color: '#007AFF',
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    resendTextDisabled: {
-        color: '#999',
     },
     backButton: {
         padding: 10,
