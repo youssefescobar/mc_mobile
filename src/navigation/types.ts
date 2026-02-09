@@ -1,9 +1,9 @@
 export type RootStackParamList = {
     Login: undefined;
     SignUp: undefined;
-    VerifyEmail: { email: string; isPilgrim?: boolean };
+    VerifyEmail: { email: string; isPilgrim?: boolean; postVerifyAction?: 'request-moderator' };
     CreateGroup: undefined;
-    GroupDetails: { groupId: string; groupName: string };
+    GroupDetails: { groupId: string; groupName: string; focusPilgrimId?: string; openProfile?: boolean };
     PilgrimDashboard: { userId: string };
     PilgrimProfile: { userId: string };
     ModeratorDashboard: { userId: string };

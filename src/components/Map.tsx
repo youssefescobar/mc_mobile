@@ -18,9 +18,19 @@ interface Props {
         description?: string;
     }>;
     onLocationUpdate?: (location: Location.LocationObject) => void;
+    highlightedMarkerId?: string | null;
+    followsUserLocation?: boolean;
+    showsUserLocation?: boolean;
 }
 
-export default function Map({ initialRegion, markers = [], onLocationUpdate }: Props) {
+export default function Map({
+    initialRegion,
+    markers = [],
+    onLocationUpdate,
+    highlightedMarkerId,
+    followsUserLocation = true,
+    showsUserLocation = true
+}: Props) {
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -57,20 +67,20 @@ export default function Map({ initialRegion, markers = [], onLocationUpdate }: P
         );
     }
 
-    const region = location ? {
+    const region = initialRegion || (location ? {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
         latitudeDelta: 0.005,
         longitudeDelta: 0.005,
-    } : initialRegion;
+    } : undefined);
 
     return (
         <View style={styles.container}>
             <MapView
                 style={styles.map}
                 region={region}
-                showsUserLocation={true}
-                followsUserLocation={true}
+                showsUserLocation={showsUserLocation}
+                followsUserLocation={followsUserLocation}
             >
                 {markers.map(marker => (
                     <Marker
@@ -78,6 +88,7 @@ export default function Map({ initialRegion, markers = [], onLocationUpdate }: P
                         coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
                         title={marker.title}
                         description={marker.description}
+                        pinColor={highlightedMarkerId === marker.id ? '#2563EB' : '#10B981'}
                     />
                 ))}
             </MapView>

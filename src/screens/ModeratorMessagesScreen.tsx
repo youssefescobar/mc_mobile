@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { api } from '../services/api';
+import { api, BASE_URL } from '../services/api';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ModeratorMessagesScreen'>;
 
@@ -28,10 +30,75 @@ export default function ModeratorMessagesScreen({ navigation, route }: Props) {
     const { groupId, groupName } = route.params;
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
+    const [playingId, setPlayingId] = useState<string | null>(null);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const soundRef = useRef<Audio.Sound | null>(null);
 
     useEffect(() => {
         fetchMessages();
+        return () => {
+            if (soundRef.current) soundRef.current.unloadAsync();
+            Speech.stop();
+        };
     }, []);
+
+    const playVoice = async (filename: string, id: string) => {
+        try {
+            if (playingId === id && soundRef.current) {
+                await soundRef.current.stopAsync();
+                await soundRef.current.unloadAsync();
+                soundRef.current = null;
+                setPlayingId(null);
+                return;
+            }
+            if (soundRef.current) {
+                await soundRef.current.stopAsync();
+                await soundRef.current.unloadAsync();
+            }
+            Speech.stop();
+            setIsSpeaking(false);
+
+            const serverBase = BASE_URL.replace('/api', '');
+            const uri = `${serverBase}/uploads/${filename}`;
+            const { sound } = await Audio.Sound.createAsync({ uri });
+            soundRef.current = sound;
+            setPlayingId(id);
+
+            sound.setOnPlaybackStatusUpdate((status: any) => {
+                if (status.didJustFinish) {
+                    setPlayingId(null);
+                    sound.unloadAsync();
+                    soundRef.current = null;
+                }
+            });
+            await sound.playAsync();
+        } catch (e) {
+            console.error('Error playing voice:', e);
+            setPlayingId(null);
+        }
+    };
+
+    const playTts = (text: string, id: string) => {
+        if (playingId === id && isSpeaking) {
+            Speech.stop();
+            setPlayingId(null);
+            setIsSpeaking(false);
+            return;
+        }
+        if (soundRef.current) {
+            soundRef.current.stopAsync();
+            soundRef.current.unloadAsync();
+            soundRef.current = null;
+        }
+        Speech.stop();
+
+        setPlayingId(id);
+        setIsSpeaking(true);
+        Speech.speak(text, {
+            onDone: () => { setPlayingId(null); setIsSpeaking(false); },
+            onError: () => { setPlayingId(null); setIsSpeaking(false); },
+        });
+    };
 
     const fetchMessages = async () => {
         try {
@@ -76,6 +143,7 @@ export default function ModeratorMessagesScreen({ navigation, route }: Props) {
     const renderItem = ({ item }: { item: Message }) => {
         const isVoice = item.type === 'voice';
         const isTts = item.type === 'tts';
+        const isPlaying = playingId === item._id;
 
         return (
             <View style={[
@@ -115,11 +183,26 @@ export default function ModeratorMessagesScreen({ navigation, route }: Props) {
                 )}
 
                 {isTts && (
-                    <Text style={styles.content}>{item.original_text}</Text>
+                    <View>
+                        <Text style={styles.content}>{item.original_text}</Text>
+                        <TouchableOpacity
+                            style={[styles.playButton, (isPlaying && isSpeaking) && styles.playingButton]}
+                            onPress={() => playTts(item.original_text!, item._id)}
+                        >
+                            <Ionicons name={(isPlaying && isSpeaking) ? 'pause' : 'play'} size={18} color="white" />
+                            <Text style={styles.playText}>{(isPlaying && isSpeaking) ? 'Playing...' : 'Listen'}</Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
 
                 {isVoice && (
-                    <Text style={styles.voiceIndicator}>🎤 Voice message</Text>
+                    <TouchableOpacity
+                        style={[styles.playButton, isPlaying && styles.playingButton]}
+                        onPress={() => playVoice(item.media_url!, item._id)}
+                    >
+                        <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color="white" />
+                        <Text style={styles.playText}>{isPlaying ? 'Playing...' : 'Play Voice'}</Text>
+                    </TouchableOpacity>
                 )}
 
                 <View style={styles.footer}>
@@ -261,11 +344,24 @@ const styles = StyleSheet.create({
         lineHeight: 21,
         marginBottom: 10,
     },
-    voiceIndicator: {
-        fontSize: 14,
-        color: '#64748B',
-        fontStyle: 'italic',
+    playButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#3B82F6',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 10,
+        alignSelf: 'flex-start',
+        gap: 8,
         marginBottom: 10,
+    },
+    playingButton: {
+        backgroundColor: '#EF4444',
+    },
+    playText: {
+        color: 'white',
+        fontWeight: '600',
+        fontSize: 14,
     },
     footer: {
         flexDirection: 'row',

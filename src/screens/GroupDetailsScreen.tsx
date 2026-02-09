@@ -1,7 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, Linking } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useIsFocused } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { api } from '../services/api';
 import { Group, Pilgrim } from '../types';
@@ -9,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useToast } from '../components/ToastContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 import GroupCodeModal from '../components/GroupCodeModal';
+import Map from '../components/Map';
 
 import ComposeMessageModal from '../components/ComposeMessageModal';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,23 +18,29 @@ import { Ionicons } from '@expo/vector-icons';
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupDetails'>;
 
 export default function GroupDetailsScreen({ route, navigation }: Props) {
-    const { groupId, groupName } = route.params;
+    const { groupId, groupName, focusPilgrimId, openProfile } = route.params;
+    const didAutoFocus = useRef(false);
     const [pilgrims, setPilgrims] = useState<Pilgrim[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showBroadcastModal, setShowBroadcastModal] = useState(false);
     const { showToast } = useToast();
+    const [selectedPilgrimId, setSelectedPilgrimId] = useState<string | null>(null);
+    const [showDirectModal, setShowDirectModal] = useState(false);
+    const [directRecipientId, setDirectRecipientId] = useState<string | null>(null);
+    const [directRecipientName, setDirectRecipientName] = useState('');
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [profilePilgrim, setProfilePilgrim] = useState<Pilgrim | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const isFocused = useIsFocused();
 
     // Add Pilgrim Form State
-    const [newPilgrimName, setNewPilgrimName] = useState('');
-    const [newPilgrimNationalId, setNewPilgrimNationalId] = useState('');
-    const [newPilgrimPhone, setNewPilgrimPhone] = useState('');
+    const [existingIdentifier, setExistingIdentifier] = useState('');
     const [adding, setAdding] = useState(false);
 
-    const fetchGroupDetails = async () => {
+    const fetchGroupDetails = async (options?: { silent?: boolean }) => {
         try {
-            setLoading(true);
-            setLoading(true);
+            if (!options?.silent) setLoading(true);
             const response = await api.get(`/groups/${groupId}`);
             // Backend returns group object directly for single group
             if (response.data) {
@@ -40,9 +48,9 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
             }
         } catch (error: any) {
             console.error(error);
-            showToast('Failed to load pilgrims', 'error', { title: 'Error' });
+            if (!options?.silent) showToast('Failed to load pilgrims', 'error', { title: 'Error' });
         } finally {
-            setLoading(false);
+            if (!options?.silent) setLoading(false);
         }
     };
 
@@ -50,29 +58,41 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         fetchGroupDetails();
     }, [groupId]);
 
+    useEffect(() => {
+        if (!focusPilgrimId || didAutoFocus.current || pilgrims.length === 0) return;
+        const found = pilgrims.find(p => p._id === focusPilgrimId);
+        if (!found) return;
+        didAutoFocus.current = true;
+        setSelectedPilgrimId(found._id);
+        if (openProfile) {
+            setProfilePilgrim(found);
+            setShowProfileModal(true);
+        }
+    }, [focusPilgrimId, openProfile, pilgrims]);
+
+    useEffect(() => {
+        if (!isFocused) return;
+        const interval = setInterval(() => fetchGroupDetails({ silent: true }), 15000);
+        return () => clearInterval(interval);
+    }, [isFocused, groupId]);
+
     const handleAddPilgrim = async () => {
-        if (!newPilgrimName || !newPilgrimNationalId) {
-            showToast('Name and National ID are required.', 'error', { title: 'Missing Info' });
+        if (!existingIdentifier.trim()) {
+            showToast('Email, phone number, or national ID is required.', 'error', { title: 'Missing Info' });
             return;
         }
 
         setAdding(true);
         try {
             const response = await api.post(`/groups/${groupId}/add-pilgrim`, {
-                full_name: newPilgrimName,
-                national_id: newPilgrimNationalId,
-                phone_number: newPilgrimPhone,
-                age: 30,
-                gender: 'male',
-                medical_history: 'None'
+                identifier: existingIdentifier.trim()
             });
 
             if (response.data.success) {
-                showToast(`${newPilgrimName} has been added to the group.`, 'success', { title: 'Pilgrim Added!' });
+                const successName = existingIdentifier.trim();
+                showToast(`${successName} has been added to the group.`, 'success', { title: 'Pilgrim Added!' });
                 setShowAddModal(false);
-                setNewPilgrimName('');
-                setNewPilgrimNationalId('');
-                setNewPilgrimPhone('');
+                setExistingIdentifier('');
                 fetchGroupDetails();
             }
         } catch (error: any) {
@@ -113,38 +133,50 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         }
     };
 
-    // Invite Pilgrim State
-    const [showInvitePilgrimModal, setShowInvitePilgrimModal] = useState(false);
-    const [invitePilgrimEmail, setInvitePilgrimEmail] = useState('');
-    const [invitingPilgrim, setInvitingPilgrim] = useState(false);
-
     // Group Code Modal State
     const [showGroupCodeModal, setShowGroupCodeModal] = useState(false);
-
-    const handleInvitePilgrim = async () => {
-        if (!invitePilgrimEmail) {
-            showToast('Please enter an email address', 'error');
-            return;
-        }
-
-        setInvitingPilgrim(true);
-        try {
-            await api.post(`/groups/${groupId}/invite-pilgrim`, { email: invitePilgrimEmail });
-            showToast('Pilgrim invitation sent successfully', 'success');
-            setShowInvitePilgrimModal(false);
-            setInvitePilgrimEmail('');
-        } catch (error: any) {
-            console.error('Invite pilgrim error:', error);
-            showToast(error.response?.data?.message || 'Failed to send invitation', 'error');
-        } finally {
-            setInvitingPilgrim(false);
-        }
-    };
 
     const handleRemovePilgrim = (pilgrimId: string, pilgrimName: string) => {
         setSelectedPilgrim({ id: pilgrimId, name: pilgrimName });
         setShowDeletePilgrimModal(true);
     };
+
+    const pilgrimsWithLocation = pilgrims.filter(p => p.location && p.location.lat && p.location.lng);
+    const mapMarkers = pilgrimsWithLocation.map(p => ({
+        id: p._id,
+        latitude: p.location!.lat,
+        longitude: p.location!.lng,
+        title: p.full_name,
+        description: `Battery: ${p.battery_percent || '?'}%`
+    }));
+
+    const getInitialRegion = () => {
+        if (!pilgrimsWithLocation.length) return undefined;
+        const lats = pilgrimsWithLocation.map(p => p.location!.lat);
+        const lngs = pilgrimsWithLocation.map(p => p.location!.lng);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+        const latitude = (minLat + maxLat) / 2;
+        const longitude = (minLng + maxLng) / 2;
+        const latitudeDelta = Math.max(0.01, (maxLat - minLat) * 1.5);
+        const longitudeDelta = Math.max(0.01, (maxLng - minLng) * 1.5);
+        return { latitude, longitude, latitudeDelta, longitudeDelta };
+    };
+
+    const selectedPilgrimForMap = selectedPilgrimId
+        ? pilgrimsWithLocation.find(p => p._id === selectedPilgrimId)
+        : undefined;
+
+    const mapRegion = selectedPilgrimForMap
+        ? {
+            latitude: selectedPilgrimForMap.location!.lat,
+            longitude: selectedPilgrimForMap.location!.lng,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01
+        }
+        : getInitialRegion();
 
     const confirmRemovePilgrim = async () => {
         if (!selectedPilgrim) return;
@@ -195,6 +227,16 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
             </SafeAreaView>
 
             <View style={styles.content}>
+                {/* Map */}
+                <View style={styles.mapCard}>
+                    <Map
+                        initialRegion={mapRegion}
+                        markers={mapMarkers}
+                        highlightedMarkerId={selectedPilgrimId}
+                        followsUserLocation={false}
+                        showsUserLocation={false}
+                    />
+                </View>
 
                 {/* Stats Row */}
                 <View style={styles.statsRow}>
@@ -202,23 +244,71 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                     <Text style={styles.statsCount}>{pilgrims.length}</Text>
                 </View>
 
+                {/* Message Action Buttons */}
+                <View style={styles.messageActions}>
+                    <TouchableOpacity
+                        style={styles.messageActionBtn}
+                        onPress={() => setShowBroadcastModal(true)}
+                    >
+                        <Ionicons name="megaphone-outline" size={18} color="#2563EB" />
+                        <Text style={styles.messageActionText}>Broadcast Message</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.messageActionBtn}
+                        onPress={() => navigation.navigate('ModeratorMessagesScreen', { groupId, groupName })}
+                    >
+                        <Ionicons name="chatbubbles-outline" size={18} color="#2563EB" />
+                        <Text style={styles.messageActionText}>Sent Messages</Text>
+                    </TouchableOpacity>
+                </View>
+
                 {/* Minimal Section Header */}
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Pilgrim List</Text>
-                    {/* Actions moved to FAB */}
+                </View>
+
+                {/* Search Bar */}
+                <View style={styles.searchContainer}>
+                    <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search by name, ID, or phone..."
+                        placeholderTextColor="#94A3B8"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                            <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {loading ? (
                     <ActivityIndicator size="large" color="#2563EB" style={{ marginTop: 20 }} />
                 ) : (
                     <FlatList
-                        data={pilgrims}
+                        data={pilgrims.filter(p => {
+                            if (!searchQuery.trim()) return true;
+                            const q = searchQuery.toLowerCase().trim();
+                            return (
+                                p.full_name.toLowerCase().includes(q) ||
+                                p.national_id.toLowerCase().includes(q) ||
+                                p.phone_number.toLowerCase().includes(q)
+                            );
+                        })}
                         keyExtractor={item => item._id}
                         showsVerticalScrollIndicator={false}
                         renderItem={({ item }) => (
-                            <View style={styles.pilgrimCard}>
+                            <TouchableOpacity
+                                style={[styles.pilgrimCard, selectedPilgrimId === item._id && styles.pilgrimCardSelected]}
+                                onPress={() => setSelectedPilgrimId(item._id)}
+                                activeOpacity={0.9}
+                            >
                                 <View style={styles.pilgrimInfo}>
-                                    <View style={styles.avatarSmall}>
+                                    <View style={[styles.avatarSmall, selectedPilgrimId === item._id && styles.avatarSmallSelected]}>
                                         <Text style={styles.avatarTextSmall}>{item.full_name.charAt(0)}</Text>
                                     </View>
                                     <View>
@@ -232,13 +322,29 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                         )}
                                     </View>
                                 </View>
-                                <TouchableOpacity
-                                    onPress={() => handleRemovePilgrim(item._id, item.full_name)}
-                                    style={styles.deletePilgrimButton}
-                                >
-                                    <Ionicons name="close-circle-outline" size={22} color="#CBD5E1" />
-                                </TouchableOpacity>
-                            </View>
+                                <View style={styles.pilgrimActions}>
+                                    <TouchableOpacity
+                                        style={styles.pilgrimActionButton}
+                                        onPress={() => {
+                                            setProfilePilgrim(item);
+                                            setShowProfileModal(true);
+                                        }}
+                                    >
+                                        <Text style={styles.pilgrimActionText}>Show Profile</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.pilgrimActionButton, styles.pilgrimActionPrimary]}
+                                        onPress={() => {
+                                            setSelectedPilgrimId(item._id);
+                                            setDirectRecipientId(item._id);
+                                            setDirectRecipientName(item.full_name);
+                                            setShowDirectModal(true);
+                                        }}
+                                    >
+                                        <Text style={[styles.pilgrimActionText, styles.pilgrimActionTextPrimary]}>Send Alert</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </TouchableOpacity>
                         )}
                         contentContainerStyle={{ paddingBottom: 100 }}
                         ListEmptyComponent={<Text style={styles.emptyText}>No pilgrims in this group yet.</Text>}
@@ -279,22 +385,6 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
 
                         <TouchableOpacity
                             style={styles.actionOption}
-                            onPress={() => { setShowActionMenu(false); setShowBroadcastModal(true); }}
-                        >
-                            <Ionicons name="megaphone-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
-                            <Text style={styles.actionOptionText}>Broadcast Message</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionOption}
-                            onPress={() => { setShowActionMenu(false); setShowInvitePilgrimModal(true); }}
-                        >
-                            <Ionicons name="mail-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
-                            <Text style={styles.actionOptionText}>Invite Pilgrim via Email</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionOption}
                             onPress={() => { setShowActionMenu(false); setShowInviteModal(true); }}
                         >
                             <Ionicons name="shield-checkmark-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
@@ -318,17 +408,6 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={styles.actionOption}
-                            onPress={() => {
-                                setShowActionMenu(false);
-                                navigation.navigate('ModeratorMessagesScreen', { groupId, groupName });
-                            }}
-                        >
-                            <Ionicons name="chatbubbles-outline" size={22} color="#334155" style={styles.actionOptionIcon} />
-                            <Text style={styles.actionOptionText}>View Sent Messages</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
                             style={styles.cancelOption}
                             onPress={() => setShowActionMenu(false)}
                         >
@@ -344,6 +423,78 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 groupId={groupId}
                 onSuccess={() => showToast('Message broadcasted successfully', 'success')}
             />
+            <ComposeMessageModal
+                visible={showDirectModal}
+                onClose={() => {
+                    setShowDirectModal(false);
+                    setDirectRecipientId(null);
+                    setDirectRecipientName('');
+                }}
+                groupId={groupId}
+                recipientId={directRecipientId}
+                submitPath="/messages/individual"
+                title={directRecipientName ? `Alert ${directRecipientName}` : 'Send Alert'}
+                onSuccess={() => showToast('Alert sent successfully', 'success')}
+            />
+
+            {/* Pilgrim Profile Modal */}
+            <Modal
+                visible={showProfileModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowProfileModal(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowProfileModal(false)}
+                >
+                    <View style={styles.modalContentSmall}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Pilgrim Profile</Text>
+                            <TouchableOpacity onPress={() => setShowProfileModal(false)}>
+                                <Text style={styles.closeText}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.profileHeaderRow}>
+                            <View style={styles.profileAvatar}>
+                                <Text style={styles.profileAvatarText}>
+                                    {profilePilgrim?.full_name?.charAt(0) || 'P'}
+                                </Text>
+                            </View>
+                            <View>
+                                <Text style={styles.profileName}>{profilePilgrim?.full_name || '-'}</Text>
+                                <Text style={styles.profileSub}>{profilePilgrim?.phone_number || 'No phone on file'}</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.profileRow}>
+                            <Text style={styles.profileLabel}>National ID</Text>
+                            <Text style={styles.profileValue}>{profilePilgrim?.national_id || '-'}</Text>
+                        </View>
+                        <View style={styles.profileRow}>
+                            <Text style={styles.profileLabel}>Email</Text>
+                            <Text style={styles.profileValue}>{profilePilgrim?.email || '-'}</Text>
+                        </View>
+                        <View style={styles.profileRow}>
+                            <Text style={styles.profileLabel}>Battery</Text>
+                            <Text style={styles.profileValue}>{profilePilgrim?.battery_percent !== undefined ? `${profilePilgrim.battery_percent}%` : '-'}</Text>
+                        </View>
+                        {profilePilgrim?.phone_number && (
+                            <View style={styles.profileActionRow}>
+                                <TouchableOpacity
+                                    style={styles.callButton}
+                                    onPress={() => Linking.openURL(`tel:${profilePilgrim.phone_number}`)}
+                                >
+                                    <Ionicons name="call" size={16} color="white" style={{ marginRight: 6 }} />
+                                    <Text style={styles.callButtonText}>Call Pilgrim</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
             {/* Add Pilgrim Modal */}
             <Modal
                 visible={showAddModal}
@@ -354,37 +505,20 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Add New Pilgrim</Text>
+                            <Text style={styles.modalTitle}>Add Pilgrim</Text>
                             <TouchableOpacity onPress={() => setShowAddModal(false)}>
                                 <Text style={styles.closeText}>✕</Text>
                             </TouchableOpacity>
                         </View>
 
                         <ScrollView>
-                            <Text style={styles.label}>Full Name</Text>
+                            <Text style={styles.label}>Email, Phone, or National ID</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="e.g. Ahmed Ali"
-                                value={newPilgrimName}
-                                onChangeText={setNewPilgrimName}
-                            />
-
-                            <Text style={styles.label}>National ID</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="National ID or Passport"
-                                value={newPilgrimNationalId}
-                                onChangeText={setNewPilgrimNationalId}
-                                keyboardType="numeric"
-                            />
-
-                            <Text style={styles.label}>Phone Number (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="+966..."
-                                value={newPilgrimPhone}
-                                onChangeText={setNewPilgrimPhone}
-                                keyboardType="phone-pad"
+                                placeholder="e.g. user@example.com, +966..., or ID"
+                                value={existingIdentifier}
+                                onChangeText={setExistingIdentifier}
+                                autoCapitalize="none"
                             />
 
                             <TouchableOpacity
@@ -457,43 +591,6 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Invite Pilgrim Modal */}
-            <Modal
-                visible={showInvitePilgrimModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowInvitePilgrimModal(false)}
-            >
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-                    <View style={styles.modalContentSmall}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Invite Pilgrim</Text>
-                            <TouchableOpacity onPress={() => setShowInvitePilgrimModal(false)}>
-                                <Text style={styles.closeText}>✕</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text style={styles.label}>Pilgrim's Email Address</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="pilgrim@example.com"
-                            value={invitePilgrimEmail}
-                            onChangeText={setInvitePilgrimEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                        />
-
-                        <TouchableOpacity
-                            style={[styles.addButton, invitingPilgrim && styles.buttonDisabled]}
-                            onPress={handleInvitePilgrim}
-                            disabled={invitingPilgrim}
-                        >
-                            <Text style={styles.addButtonText}>{invitingPilgrim ? "Sending..." : "Send Invitation"}</Text>
-                        </TouchableOpacity>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
-
             {/* Group Code Modal */}
             <GroupCodeModal
                 visible={showGroupCodeModal}
@@ -506,6 +603,18 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+        mapCard: {
+            height: 220,
+            backgroundColor: 'white',
+            borderRadius: 16,
+            overflow: 'hidden',
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.08,
+            shadowRadius: 10,
+            elevation: 4,
+        },
     container: {
         flex: 1,
         backgroundColor: '#F8F9FA', // Professional light grey
@@ -565,7 +674,29 @@ const styles = StyleSheet.create({
     statsCount: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#0F172A', // Slate 900
+        color: '#0F172A',
+    },
+    messageActions: {
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: 16,
+    },
+    messageActionBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: '#EFF6FF',
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#DBEAFE',
+    },
+    messageActionText: {
+        color: '#2563EB',
+        fontWeight: '600',
+        fontSize: 13,
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -577,9 +708,26 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 14,
         fontWeight: '700',
-        color: '#94A3B8', // Slate 400 - Uppercase style label
+        color: '#94A3B8',
         textTransform: 'uppercase',
         letterSpacing: 1,
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 14,
+        color: '#0F172A',
+        padding: 0,
     },
     pilgrimCard: {
         backgroundColor: 'white',
@@ -626,6 +774,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 4,
     },
+    pilgrimCardSelected: {
+        borderColor: '#2563EB',
+        backgroundColor: '#EFF6FF',
+    },
+    avatarSmallSelected: {
+        backgroundColor: '#DBEAFE',
+    },
+    pilgrimActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     statusDot: {
         width: 6,
         height: 6,
@@ -639,6 +799,97 @@ const styles = StyleSheet.create({
     deletePilgrimButton: {
         padding: 8,
         marginLeft: 8,
+    },
+    pilgrimActionButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        minWidth: 110,
+        alignItems: 'center',
+    },
+    pilgrimActionPrimary: {
+        backgroundColor: '#2563EB',
+        borderColor: '#2563EB',
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+    pilgrimActionText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#334155',
+    },
+    pilgrimActionTextPrimary: {
+        color: 'white',
+    },
+    profileHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 12,
+    },
+    profileAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#E2E8F0',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    profileAvatarText: {
+        color: '#1E293B',
+        fontWeight: '700',
+        fontSize: 16,
+    },
+    profileName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#0F172A',
+    },
+    profileSub: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    profileRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEF2F7',
+    },
+    profileActionRow: {
+        marginTop: 14,
+        alignItems: 'flex-start',
+    },
+    callButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#10B981',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 10,
+    },
+    callButtonText: {
+        color: 'white',
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    profileLabel: {
+        color: '#64748B',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    profileValue: {
+        color: '#0F172A',
+        fontSize: 13,
+        fontWeight: '600',
+        maxWidth: '60%'
     },
     deletePilgrimText: {
         fontSize: 18,

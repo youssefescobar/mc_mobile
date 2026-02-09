@@ -10,9 +10,20 @@ interface Props {
     onClose: () => void;
     groupId: string;
     onSuccess: () => void;
+    title?: string;
+    submitPath?: string;
+    recipientId?: string | null;
 }
 
-export default function ComposeMessageModal({ visible, onClose, groupId, onSuccess }: Props) {
+export default function ComposeMessageModal({
+    visible,
+    onClose,
+    groupId,
+    onSuccess,
+    title = 'Broadcast Message',
+    submitPath = '/messages',
+    recipientId = null
+}: Props) {
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
     const [mode, setMode] = useState<'text' | 'voice' | 'tts'>('text');
@@ -128,6 +139,9 @@ export default function ComposeMessageModal({ visible, onClose, groupId, onSucce
         try {
             const formData = new FormData();
             formData.append('group_id', groupId);
+            if (recipientId) {
+                formData.append('recipient_id', recipientId);
+            }
             formData.append('type', mode);
             formData.append('is_urgent', isUrgent.toString());
 
@@ -155,7 +169,7 @@ export default function ComposeMessageModal({ visible, onClose, groupId, onSucce
             // Actually, axios often requires explicit header removal or specific setting for FormData in RN.
             // Let's rely on standard axios for now.
 
-            await api.post('/messages', formData, {
+            await api.post(submitPath, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -190,7 +204,7 @@ export default function ComposeMessageModal({ visible, onClose, groupId, onSucce
                         <TouchableWithoutFeedback>
                             <View style={styles.content}>
                                 <View style={styles.header}>
-                                    <Text style={styles.title}>Broadcast Message</Text>
+                                    <Text style={styles.title}>{title}</Text>
                                     <TouchableOpacity onPress={onClose}>
                                         <Ionicons name="close" size={24} color="#666" />
                                     </TouchableOpacity>

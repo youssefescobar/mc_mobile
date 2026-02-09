@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, Animated } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api, clearAuthToken } from '../services/api';
@@ -13,11 +14,14 @@ interface PilgrimProfile {
     full_name: string;
     email?: string;
     email_verified?: boolean;
+    pending_moderator_request?: boolean;
+    moderator_request_status?: 'pending' | 'approved' | 'rejected' | null;
     phone_number?: string;
     national_id?: string;
     medical_history?: string;
     age?: number;
     gender?: string;
+    role?: string;
 }
 
 export default function PilgrimProfileScreen({ navigation, route }: Props) {
@@ -27,10 +31,20 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
     const [newEmail, setNewEmail] = useState('');
     const [updatingEmail, setUpdatingEmail] = useState(false);
     const { showToast } = useToast();
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const isFocused = useIsFocused();
 
     useEffect(() => {
         fetchProfile();
     }, []);
+
+    useEffect(() => {
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true
+        }).start();
+    }, [fadeAnim]);
 
     // Refresh profile when screen comes into focus (e.g., after verification)
     useEffect(() => {
@@ -40,8 +54,9 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
         return unsubscribe;
     }, [navigation]);
 
-    const fetchProfile = async () => {
+    const fetchProfile = async (options?: { silent?: boolean }) => {
         try {
+            if (!options?.silent) setLoading(true);
             const response = await api.get('/auth/me'); // Use generic profile endpoint which now supports pilgrims
             setProfile(response.data);
             if (response.data.email) {
@@ -49,11 +64,21 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
             }
         } catch (error) {
             console.error('Fetch profile error:', error);
-            showToast('Failed to load profile', 'error');
+            if (!options?.silent) showToast('Failed to load profile', 'error');
         } finally {
-            setLoading(false);
+            if (!options?.silent) setLoading(false);
         }
     };
+
+    useEffect(() => {
+        if (!isFocused) return;
+        const interval = setInterval(() => fetchProfile({ silent: true }), 20000);
+        return () => clearInterval(interval);
+    }, [isFocused]);
+
+    const isApproved = profile?.role === 'moderator' || profile?.moderator_request_status === 'approved';
+    const isPending = profile?.pending_moderator_request || profile?.moderator_request_status === 'pending';
+    const isRejected = profile?.moderator_request_status === 'rejected';
 
     const handleUpdateEmail = async () => {
         if (!newEmail || !newEmail.includes('@')) {
@@ -90,14 +115,30 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                     {
                         text: 'Verify Now', onPress: () => {
                             if (profile?.email) {
-                                navigation.navigate('VerifyEmail', { email: profile.email, isPilgrim: true });
+                                api.post('/auth/send-email-verification')
+                                    .then(() => {
+                                        showToast('Verification code sent to your email', 'success', { title: 'Code Sent' });
+                                        navigation.navigate('VerifyEmail', {
+                                            email: profile.email,
+                                            isPilgrim: true,
+                                            postVerifyAction: 'request-moderator'
+                                        });
+                                    })
+                                    .catch((error: any) => {
+                                        showToast(error.response?.data?.message || 'Failed to send verification code', 'error');
+                                    });
                             } else {
+                                showToast('Please add your email to continue.', 'info', { title: 'Email Needed' });
                                 setShowEmailInput(true);
                             }
                         }
                     }
                 ]
             );
+            return;
+        }
+
+        if (isApproved || isPending) {
             return;
         }
 
@@ -111,9 +152,12 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                     onPress: async () => {
                         try {
                             await api.post('/auth/request-moderator');
-                            Alert.alert('Success', 'Your request has been submitted.');
+                            showToast('Your request has been submitted for review.', 'success', { title: 'Request Sent' });
+                            setProfile(prev => prev ? { ...prev, pending_moderator_request: true, moderator_request_status: 'pending' } : prev);
                         } catch (error: any) {
-                            Alert.alert('Error', error.response?.data?.message || 'Failed to submit request');
+                            const message = error.response?.data?.message || 'Failed to submit request';
+                            if (message.toLowerCase().includes('pending')) return;
+                            showToast(message, 'error');
                         }
                     }
                 }
@@ -152,6 +196,8 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
+            <View style={styles.backgroundOrbOne} />
+            <View style={styles.backgroundOrbTwo} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Text style={styles.backButtonText}>←</Text>
@@ -162,79 +208,87 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.profileHeader}>
-                    <View style={styles.avatarLarge}>
-                        <Text style={styles.avatarText}>{profile?.full_name?.charAt(0) || 'P'}</Text>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <Animated.View style={[styles.animatedWrap, { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}>
+                    <View style={styles.profileHeader}>
+                        <View style={styles.avatarLarge}>
+                            <Text style={styles.avatarText}>{profile?.full_name?.charAt(0) || 'P'}</Text>
+                        </View>
+                        <Text style={styles.name}>{profile?.full_name}</Text>
+                        <Text style={styles.role}>Pilgrim</Text>
                     </View>
-                    <Text style={styles.name}>{profile?.full_name}</Text>
-                    <Text style={styles.role}>Pilgrim</Text>
-                </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Personal Information</Text>
-                    <View style={styles.card}>
-                        <InfoRow label="Phone" value={profile?.phone_number} />
-                        <InfoRow label="National ID" value={profile?.national_id || 'N/A'} />
-                        <InfoRow label="Age" value={profile?.age?.toString()} />
-                        <InfoRow label="Gender" value={profile?.gender} />
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Personal Information</Text>
+                        <View style={styles.card}>
+                            <InfoRow label="Phone" value={profile?.phone_number} />
+                            <InfoRow label="National ID" value={profile?.national_id || 'N/A'} />
+                            <InfoRow label="Age" value={profile?.age?.toString()} />
+                            <InfoRow label="Gender" value={profile?.gender} />
 
-                        {/* Email Section */}
-                        <View style={styles.emailRow}>
-                            <View>
-                                <Text style={styles.label}>Email</Text>
-                                <Text style={styles.value}>{profile?.email || 'Not Set'}</Text>
-                            </View>
-                            {profile?.email_verified ? (
-                                <View style={styles.verifiedBadge}>
-                                    <Text style={styles.verifiedText}>✓ Verified</Text>
+                            {/* Email Section */}
+                            <View style={styles.emailRow}>
+                                <View style={styles.emailTextWrap}>
+                                    <Text style={styles.label}>Email</Text>
+                                    <Text style={styles.value}>{profile?.email || 'Not Set'}</Text>
                                 </View>
-                            ) : (
-                                <TouchableOpacity onPress={() => setShowEmailInput(!showEmailInput)}>
-                                    <Text style={styles.addEmailText}>{profile?.email ? 'Verify' : 'Add Email'}</Text>
-                                </TouchableOpacity>
+                                {profile?.email_verified ? (
+                                    <View style={styles.verifiedBadge}>
+                                        <Text style={styles.verifiedText}>Verified</Text>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity onPress={() => setShowEmailInput(!showEmailInput)}>
+                                        <Text style={styles.addEmailText}>{profile?.email ? 'Verify' : 'Add Email'}</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            {/* Email Input for update */}
+                            {showEmailInput && !profile?.email_verified && (
+                                <View style={styles.emailInputContainer}>
+                                    <TextInput
+                                        style={styles.emailInput}
+                                        placeholder="Enter your email"
+                                        value={newEmail}
+                                        onChangeText={setNewEmail}
+                                        autoCapitalize="none"
+                                        keyboardType="email-address"
+                                    />
+                                    <TouchableOpacity
+                                        style={styles.updateButton}
+                                        onPress={handleUpdateEmail}
+                                        disabled={updatingEmail}
+                                    >
+                                        {updatingEmail ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.updateButtonText}>Send Code</Text>}
+                                    </TouchableOpacity>
+                                </View>
                             )}
                         </View>
-
-                        {/* Email Input for update */}
-                        {showEmailInput && !profile?.email_verified && (
-                            <View style={styles.emailInputContainer}>
-                                <TextInput
-                                    style={styles.emailInput}
-                                    placeholder="Enter your email"
-                                    value={newEmail}
-                                    onChangeText={setNewEmail}
-                                    autoCapitalize="none"
-                                    keyboardType="email-address"
-                                />
-                                <TouchableOpacity
-                                    style={styles.updateButton}
-                                    onPress={handleUpdateEmail}
-                                    disabled={updatingEmail}
-                                >
-                                    {updatingEmail ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.updateButtonText}>Send Code</Text>}
-                                </TouchableOpacity>
-                            </View>
-                        )}
                     </View>
-                </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Medical Information</Text>
-                    <View style={styles.card}>
-                        <Text style={styles.medicalText}>
-                            {profile?.medical_history || 'No medical history recorded.'}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Medical Information</Text>
+                        <View style={styles.card}>
+                            <Text style={styles.medicalText}>
+                                {profile?.medical_history || 'No medical history recorded.'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <TouchableOpacity
+                        style={[styles.actionButton, (isPending || isApproved) && styles.actionButtonDisabled]}
+                        onPress={() => handleRequestModerator()}
+                        disabled={Boolean(isPending || isApproved)}
+                    >
+                        <Text style={[styles.actionButtonText, (isPending || isApproved) && styles.actionButtonTextDisabled]}>
+                            {isApproved ? 'Approved' : isPending ? 'Request Pending' : isRejected ? 'Request Again' : 'Request to be Moderator'}
                         </Text>
-                    </View>
-                </View>
+                    </TouchableOpacity>
 
-                <TouchableOpacity style={styles.actionButton} onPress={() => handleRequestModerator()}>
-                    <Text style={styles.actionButtonText}>Request to be Moderator</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <Text style={styles.logoutText}>Log Out</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                        <Text style={styles.logoutText}>Log Out</Text>
+                    </TouchableOpacity>
+                </Animated.View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -271,7 +325,27 @@ const InfoRow = ({ label, value, last }: { label: string, value?: string, last?:
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8F9FA',
+        backgroundColor: '#F6F7FB',
+    },
+    backgroundOrbOne: {
+        position: 'absolute',
+        top: -80,
+        right: -60,
+        width: 220,
+        height: 220,
+        borderRadius: 110,
+        backgroundColor: '#E8EEFF',
+        opacity: 0.6,
+    },
+    backgroundOrbTwo: {
+        position: 'absolute',
+        top: 140,
+        left: -80,
+        width: 180,
+        height: 180,
+        borderRadius: 90,
+        backgroundColor: '#EAF7F2',
+        opacity: 0.7,
     },
     loadingContainer: {
         flex: 1,
@@ -282,11 +356,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: 'white',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        paddingHorizontal: 18,
+        paddingVertical: 14,
+        backgroundColor: '#F6F7FB',
     },
     backButton: {
         width: 40,
@@ -296,13 +368,13 @@ const styles = StyleSheet.create({
         borderRadius: 20,
     },
     backButtonText: {
-        fontSize: 24,
-        color: '#007AFF',
+        fontSize: 22,
+        color: '#1F2A44',
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1F2A44',
     },
     editButton: {
         width: 40,
@@ -311,150 +383,171 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
     },
     editButtonText: {
-        fontSize: 16,
-        color: '#007AFF',
-        fontWeight: '600',
+        fontSize: 15,
+        color: '#1F6FEB',
+        fontWeight: '700',
     },
     scrollContent: {
         padding: 20,
+        paddingBottom: 40,
+    },
+    animatedWrap: {
+        gap: 12,
     },
     profileHeader: {
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
     },
     avatarLarge: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#E3F2FD',
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        backgroundColor: '#E7EEFF',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
-        borderWidth: 4,
-        borderColor: 'white',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
+        marginBottom: 12,
+        borderWidth: 3,
+        borderColor: '#F6F7FB',
+        shadowColor: '#1F2A44',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
         elevation: 5,
     },
     avatarText: {
-        fontSize: 40,
-        fontWeight: 'bold',
-        color: '#007AFF',
+        fontSize: 34,
+        fontWeight: '700',
+        color: '#1F6FEB',
     },
     name: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 4,
+        fontSize: 22,
+        fontWeight: '700',
+        color: '#1F2A44',
+        marginBottom: 6,
     },
     role: {
-        fontSize: 16,
-        color: '#666',
-        backgroundColor: '#E9ECEF',
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
+        fontSize: 13,
+        color: '#4B5563',
+        backgroundColor: '#EDEFF6',
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 999,
         overflow: 'hidden',
     },
     section: {
-        marginBottom: 24,
+        marginBottom: 18,
     },
     sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#666',
-        marginBottom: 8,
-        marginLeft: 4,
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#7B8191',
+        marginBottom: 10,
+        marginLeft: 6,
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        letterSpacing: 1.2,
     },
     card: {
         backgroundColor: 'white',
-        borderRadius: 16,
+        borderRadius: 18,
         padding: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowColor: '#1F2A44',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#EDF0F6',
     },
     infoRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#F0F0F0',
+        borderBottomColor: '#F1F2F6',
     },
     noBorder: {
         borderBottomWidth: 0,
     },
     label: {
-        fontSize: 15,
-        color: '#666',
+        fontSize: 14,
+        color: '#6B7280',
     },
     value: {
         fontSize: 15,
-        fontWeight: '500',
-        color: '#333',
+        fontWeight: '600',
+        color: '#1F2A44',
     },
     medicalText: {
         fontSize: 15,
-        color: '#333',
+        color: '#1F2A44',
         lineHeight: 22,
     },
     logoutButton: {
-        backgroundColor: '#FFE5E5',
-        paddingVertical: 16,
+        backgroundColor: '#FFE9EA',
+        paddingVertical: 14,
         borderRadius: 14,
         alignItems: 'center',
-        marginTop: 10,
-        marginBottom: 40,
+        marginTop: 6,
+        marginBottom: 24,
     },
     logoutText: {
-        color: '#FF3B30',
-        fontSize: 16,
-        fontWeight: 'bold',
+        color: '#E11D48',
+        fontSize: 15,
+        fontWeight: '700',
     },
     actionButton: {
-        backgroundColor: 'white',
-        paddingVertical: 16,
+        backgroundColor: '#1F6FEB',
+        paddingVertical: 14,
         borderRadius: 14,
         alignItems: 'center',
-        marginTop: 10,
+        marginTop: 6,
         marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#007AFF',
+        shadowColor: '#1F6FEB',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 18,
+        elevation: 4,
     },
     actionButtonText: {
-        color: '#007AFF',
-        fontSize: 16,
-        fontWeight: 'bold',
+        color: 'white',
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    actionButtonDisabled: {
+        backgroundColor: '#E7ECF6',
+        borderColor: '#D0D5DD',
+        shadowOpacity: 0,
+    },
+    actionButtonTextDisabled: {
+        color: '#98A2B3',
     },
     emailRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#F0F0F0',
+        borderBottomColor: '#F1F2F6',
+    },
+    emailTextWrap: {
+        flex: 1,
+        marginRight: 10,
     },
     verifiedBadge: {
-        backgroundColor: '#E8F5E9',
-        paddingHorizontal: 8,
+        backgroundColor: '#E8F5EE',
+        paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 4,
+        borderRadius: 999,
+        alignSelf: 'flex-start',
     },
     verifiedText: {
-        color: '#4CAF50',
+        color: '#16A34A',
         fontSize: 12,
-        fontWeight: 'bold',
+        fontWeight: '700',
     },
     addEmailText: {
-        color: '#007AFF',
-        fontSize: 14,
-        fontWeight: '600',
+        color: '#1F6FEB',
+        fontSize: 13,
+        fontWeight: '700',
     },
     emailInputContainer: {
         marginTop: 10,
@@ -464,22 +557,22 @@ const styles = StyleSheet.create({
     emailInput: {
         flex: 1,
         borderWidth: 1,
-        borderColor: '#E0E0E0',
-        borderRadius: 8,
+        borderColor: '#E1E6F0',
+        borderRadius: 10,
         padding: 10,
         marginRight: 10,
-        backgroundColor: '#F9F9F9',
+        backgroundColor: '#F9FAFC',
         fontSize: 14,
     },
     updateButton: {
-        backgroundColor: '#007AFF',
+        backgroundColor: '#1F6FEB',
         paddingHorizontal: 16,
         paddingVertical: 10,
-        borderRadius: 8,
+        borderRadius: 10,
     },
     updateButtonText: {
         color: 'white',
-        fontWeight: 'bold',
-        fontSize: 14,
+        fontWeight: '700',
+        fontSize: 13,
     },
 });

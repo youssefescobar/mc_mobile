@@ -4,7 +4,6 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { api, setAuthToken, BASE_URL } from '../services/api';
-import Map from '../components/Map';
 import { Group, Pilgrim } from '../types';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -28,23 +27,34 @@ interface UserProfile {
 export default function ModeratorDashboard({ route, navigation }: Props) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(true);
-    const [allPilgrims, setAllPilgrims] = useState<Pilgrim[]>([]);
-    const [isMapVisible, setIsMapVisible] = useState(true);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [showProfile, setShowProfile] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [shownSosId, setShownSosId] = useState<string | null>(null);
     const { showToast } = useToast();
 
-    const fetchNotifications = async () => {
+    const fetchNotifications = useCallback(async () => {
         try {
             const response = await api.get('/notifications?limit=1');
             if (response.data.success) {
                 setUnreadCount(response.data.unread_count);
+                const latest = response.data.notifications?.[0];
+                if (latest && latest.type === 'sos_alert' && !latest.read && latest._id !== shownSosId) {
+                    setShownSosId(latest._id);
+                    Alert.alert(
+                        latest.title || 'SOS Alert',
+                        latest.message || 'A pilgrim needs help.',
+                        [
+                            { text: 'Dismiss', style: 'cancel' },
+                            { text: 'Open Notifications', onPress: () => navigation.navigate('Notifications') }
+                        ]
+                    );
+                }
             }
         } catch (error) {
             console.error('Failed to fetch unread count', error);
         }
-    };
+    }, [navigation, shownSosId]);
 
     const fetchGroups = async () => {
         try {
@@ -54,9 +64,6 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                 const fetchedGroups: Group[] = response.data.data;
                 setGroups(fetchedGroups);
 
-                // Flatten pilgrims from all groups for the map
-                const pilgrims = fetchedGroups.flatMap(g => g.pilgrims || []);
-                setAllPilgrims(pilgrims);
             }
         } catch (error: any) {
             console.error(error);
@@ -122,6 +129,8 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
             fetchProfile();
             fetchNotifications();
             setupLocationTracking(); // Start tracking
+            const intervalId = setInterval(fetchNotifications, 15000);
+            return () => clearInterval(intervalId);
         }, [])
     );
 
@@ -168,22 +177,17 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
         );
     };
 
-    const mapMarkers = allPilgrims
-        .filter(p => p.location && p.location.lat && p.location.lng)
-        .map(p => ({
-            id: p._id,
-            latitude: p.location!.lat,
-            longitude: p.location!.lng,
-            title: p.full_name,
-            description: `Battery: ${p.battery_percent || '?'}%`
-        }));
+    const totalPilgrims = groups.reduce((sum, group) => sum + (group.pilgrims?.length || 0), 0);
 
     return (
         <View style={styles.container}>
             {/* Header */}
             <SafeAreaView style={styles.header} edges={['top']}>
-                <Text style={styles.headerTitle}>Dashboard</Text>
-                <View style={{ flexDirection: 'row', gap: 15, alignItems: 'center' }}>
+                <View>
+                    <Text style={styles.headerTitle}>Dashboard</Text>
+                    <Text style={styles.headerSubtitle}>Welcome back{profile?.full_name ? `, ${profile.full_name}` : ''}</Text>
+                </View>
+                <View style={styles.headerActions}>
                     <TouchableOpacity
                         style={styles.notificationButton}
                         onPress={() => navigation.navigate('Notifications')}
@@ -269,23 +273,32 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                 </TouchableWithoutFeedback>
             </Modal>
 
-            {/* Map Toggle & Container */}
-            <View style={styles.mapHeader}>
-                <Text style={styles.sectionTitle}>Live Map</Text>
-                <TouchableOpacity onPress={() => setIsMapVisible(!isMapVisible)}>
-                    <Text style={styles.toggleText}>{isMapVisible ? 'Hide Map' : 'Show Map'}</Text>
-                </TouchableOpacity>
+            {/* Stats */}
+            <View style={styles.statsRow}>
+                <View style={styles.statCard}>
+                    <View style={styles.statIcon}>
+                        <Ionicons name="grid" size={16} color="#2563EB" />
+                    </View>
+                    <Text style={styles.statLabel}>Groups</Text>
+                    <Text style={styles.statValue}>{groups.length}</Text>
+                </View>
+                <View style={styles.statCard}>
+                    <View style={styles.statIcon}>
+                        <Ionicons name="people" size={16} color="#16A34A" />
+                    </View>
+                    <Text style={styles.statLabel}>Pilgrims</Text>
+                    <Text style={styles.statValue}>{totalPilgrims}</Text>
+                </View>
             </View>
 
-            {isMapVisible && (
-                <View style={styles.mapContainer}>
-                    <Map markers={mapMarkers} />
-                </View>
-            )}
-
             {/* Group List */}
-            <View style={[styles.listContainer, !isMapVisible && styles.listContainerFull]}>
-                <Text style={styles.sectionTitleList}>My Groups</Text>
+            <View style={styles.listContainer}>
+                <View style={styles.listHeader}>
+                    <Text style={styles.sectionTitleList}>My Groups</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('CreateGroup')}>
+                        <Text style={styles.createLink}>Create Group</Text>
+                    </TouchableOpacity>
+                </View>
                 {loading ? (
                     <ActivityIndicator size="large" color="#007AFF" />
                 ) : (
@@ -302,9 +315,14 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                                     style={styles.groupCard}
                                     onPress={() => navigation.navigate('GroupDetails', { groupId: item._id, groupName: item.group_name })}
                                 >
-                                    <View>
-                                        <Text style={styles.groupName}>{item.group_name}</Text>
-                                        <Text style={styles.groupDate}>Created: {new Date(item.created_at).toLocaleDateString()}</Text>
+                                    <View style={styles.groupCardLeft}>
+                                        <View style={styles.groupIconCircle}>
+                                            <Ionicons name="people" size={16} color="#2563EB" />
+                                        </View>
+                                        <View>
+                                            <Text style={styles.groupName}>{item.group_name}</Text>
+                                            <Text style={styles.groupDate}>Created {new Date(item.created_at).toLocaleDateString()}</Text>
+                                        </View>
                                     </View>
                                     <View style={styles.pilgrimCountBadge}>
                                         <Text style={styles.pilgrimCountText}>{item.pilgrims?.length || 0}</Text>
@@ -333,36 +351,58 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F5F7FB',
     },
     header: {
-        backgroundColor: 'white',
+        backgroundColor: '#F5F7FB',
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingBottom: 15,
-        paddingTop: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        paddingBottom: 12,
+        paddingTop: 6,
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: '800',
-        color: '#333',
+        color: '#0F172A',
     },
-    profileButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
+    headerSubtitle: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    headerActions: {
+        flexDirection: 'row',
+        gap: 12,
         alignItems: 'center',
     },
+    profileButton: {
+        width: 42,
+        height: 42,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        borderRadius: 21,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 4,
+    },
     notificationButton: {
-        width: 40,
-        height: 40,
+        width: 42,
+        height: 42,
         justifyContent: 'center',
         alignItems: 'center',
         position: 'relative',
+        backgroundColor: 'white',
+        borderRadius: 21,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 4,
     },
     badge: {
         position: 'absolute',
@@ -431,8 +471,8 @@ const styles = StyleSheet.create({
     },
     profileRole: {
         fontSize: 14,
-        color: '#666',
-        backgroundColor: '#E3F2FD',
+        color: '#475569',
+        backgroundColor: '#EEF2FF',
         paddingHorizontal: 12,
         paddingVertical: 4,
         borderRadius: 12,
@@ -458,7 +498,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     editProfileButton: {
-        backgroundColor: '#f0f0f0',
+        backgroundColor: '#F1F5F9',
         width: '100%',
         paddingVertical: 14,
         borderRadius: 12,
@@ -482,65 +522,103 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
-    mapHeader: {
+    statsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        gap: 12,
         paddingHorizontal: 20,
-        paddingVertical: 10,
+        marginTop: 6,
+        marginBottom: 12,
     },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#666',
+    statCard: {
+        flex: 1,
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
     },
-    toggleText: {
-        color: '#007AFF',
+    statIcon: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: '#EFF6FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    statLabel: {
+        fontSize: 12,
+        color: '#64748B',
         fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
     },
-    mapContainer: {
-        height: '40%',
-        width: '100%',
+    statValue: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#0F172A',
+        marginTop: 4,
     },
     listContainer: {
         flex: 1,
         backgroundColor: 'white',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         padding: 20,
-        elevation: 5,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-        marginTop: -15,
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 6,
     },
-    listContainerFull: {
-        marginTop: 0,
-        borderTopLeftRadius: 0,
-        borderTopRightRadius: 0,
+    listHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 15,
     },
     sectionTitleList: {
         fontSize: 20,
         fontWeight: 'bold',
         marginBottom: 15,
-        color: '#333',
+        color: '#0F172A',
+    },
+    createLink: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#2563EB',
     },
     groupCard: {
         padding: 16,
-        backgroundColor: '#f9f9f9',
-        borderRadius: 12,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: '#E2E8F0',
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    groupCardLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    groupIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#EEF2FF',
+        justifyContent: 'center',
         alignItems: 'center',
     },
     groupName: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#333',
+        color: '#0F172A',
         marginBottom: 4,
     },
     deleteAction: {
@@ -564,7 +642,7 @@ const styles = StyleSheet.create({
         color: '#999',
     },
     pilgrimCountBadge: {
-        backgroundColor: '#E3F2FD',
+        backgroundColor: '#DBEAFE',
         minWidth: 40,
         height: 40,
         borderRadius: 20,
@@ -575,7 +653,7 @@ const styles = StyleSheet.create({
     pilgrimCountText: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#007AFF',
+        color: '#1D4ED8',
     },
     emptyText: {
         textAlign: 'center',
@@ -586,14 +664,14 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 40,
         right: 20,
-        backgroundColor: '#007AFF',
+        backgroundColor: '#2563EB',
         width: 60,
         height: 60,
         borderRadius: 30,
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 8,
-        shadowColor: '#007AFF',
+        shadowColor: '#2563EB',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.4,
         shadowRadius: 5,
