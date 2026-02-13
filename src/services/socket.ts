@@ -1,10 +1,15 @@
 import { io, Socket } from 'socket.io-client';
 import { BASE_URL } from './api';
+import { getUserId } from './user';
 
 class SocketService {
-    private socket: Socket | null = null;
+    public socket: Socket | null = null;
 
-    connect() {
+    getSocket(): Socket | null {
+        return this.socket;
+    }
+
+    async connect() {
         if (this.socket?.connected) return;
 
         // BASE_URL is likely http://IP:5000/api. Socket needs http://IP:5000
@@ -13,12 +18,15 @@ class SocketService {
         this.socket = io(socketUrl, {
             transports: ['websocket'],
             forceNew: true,
-            // reconnection: true,
-            // reconnectionAttempts: 5
         });
 
-        this.socket.on('connect', () => {
+        this.socket.on('connect', async () => {
             console.log('[SocketService] Connected:', this.socket?.id);
+            // Register userId for signaling
+            const userId = await getUserId();
+            if (userId) {
+                this.socket?.emit('register-user', { userId });
+            }
         });
 
         this.socket.on('disconnect', () => {

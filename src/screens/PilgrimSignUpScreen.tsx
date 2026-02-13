@@ -44,7 +44,7 @@ export default function PilgrimSignUpScreen() {
 
         setLoading(true);
         try {
-            const response = await api.post('/auth/register-public-pilgrim', {
+            const response = await api.post('/auth/register', {
                 full_name: fullName,
                 national_id: nationalId,
                 phone_number: phoneNumber,

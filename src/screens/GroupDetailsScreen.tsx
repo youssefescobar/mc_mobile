@@ -1,6 +1,7 @@
 
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, Linking, Share } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, Linking, Share, RefreshControl, Switch, Animated as RNAnimated } from 'react-native';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useIsFocused } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
@@ -13,15 +14,22 @@ import GroupCodeModal from '../components/GroupCodeModal';
 import Map from '../components/Map';
 import ComposeMessageModal from '../components/ComposeMessageModal';
 import { Ionicons } from '@expo/vector-icons';
+import CallModal from '../components/CallModal';
 import { useTranslation } from 'react-i18next';
 import { socketService } from '../services/socket';
+import { useIsRTL } from '../hooks/useIsRTL';
+import { openNavigation } from '../utils/openNavigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupDetails'>;
 
 export default function GroupDetailsScreen({ route, navigation }: Props) {
+    // Call state
+    const [callModalVisible, setCallModalVisible] = useState(false);
+    const [callTarget, setCallTarget] = useState<{ id: string; name: string } | null>(null);
+    const [isCaller, setIsCaller] = useState(false);
     const { groupId, groupName, focusPilgrimId, openProfile } = route.params;
     const { t, i18n } = useTranslation();
-    const isRTL = i18n.language === 'ar' || i18n.language === 'ur';
+    const isRTL = useIsRTL();
     const didAutoFocus = useRef(false);
     const [pilgrims, setPilgrims] = useState<Pilgrim[]>([]);
     const [loading, setLoading] = useState(true);
@@ -50,6 +58,8 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const [showDeletePilgrimModal, setShowDeletePilgrimModal] = useState(false);
     const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false);
     const [selectedPilgrim, setSelectedPilgrim] = useState<{ id: string, name: string } | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+    const [allowPilgrimNav, setAllowPilgrimNav] = useState(false);
 
     const fetchGroupDetails = async (options?: { silent?: boolean }) => {
         try {
@@ -57,12 +67,14 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
             const response = await api.get(`/groups/${groupId}`);
             if (response.data) {
                 setPilgrims(response.data.pilgrims || []);
+                setAllowPilgrimNav(response.data.allow_pilgrim_navigation || false);
             }
         } catch (error: any) {
             console.error(error);
             if (!options?.silent) showToast(t('failed_load_pilgrims'), 'error', { title: t('error') });
         } finally {
             if (!options?.silent) setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -241,14 +253,31 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         longitudeDelta: 0.01
     } : getInitialRegion();
 
+    const renderRightActions = useCallback((pilgrimId: string, pilgrimName: string) => {
+        return (
+            <TouchableOpacity
+                style={styles.swipeDeleteBtn}
+                onPress={() => {
+                    setSelectedPilgrim({ id: pilgrimId, name: pilgrimName });
+                    setShowDeletePilgrimModal(true);
+                }}
+            >
+                <Ionicons name="trash" size={22} color="white" />
+                <Text style={styles.swipeDeleteText}>Remove</Text>
+            </TouchableOpacity>
+        );
+    }, []);
+
     return (
-        <View style={styles.container}>
+        <GestureHandlerRootView style={styles.container}>
             <SafeAreaView style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]} edges={['top']}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={24} color="#1A1A1A" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{groupName}</Text>
-                <View style={{ width: 32 }} />
+                <TouchableOpacity onPress={() => setShowDeleteGroupModal(true)} style={styles.backButton}>
+                    <Ionicons name="trash-outline" size={22} color="#EF4444" />
+                </TouchableOpacity>
             </SafeAreaView>
 
             <View style={styles.content}>
@@ -267,14 +296,34 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                     <Text style={styles.statsCount}>{pilgrims.length}</Text>
                 </View>
 
+                <View style={[styles.navToggleRow, isRTL && { flexDirection: 'row-reverse' }]}>
+                    <View style={[{ flexDirection: 'row', alignItems: 'center' }, isRTL && { flexDirection: 'row-reverse' }]}>
+                        <Ionicons name="navigate-outline" size={16} color="#475569" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 6 }} />
+                        <Text style={styles.navToggleLabel}>Allow pilgrims to navigate to you</Text>
+                    </View>
+                    <Switch
+                        value={allowPilgrimNav}
+                        onValueChange={async (val) => {
+                            setAllowPilgrimNav(val);
+                            try {
+                                await api.put(`/groups/${groupId}`, { allow_pilgrim_navigation: val });
+                            } catch {
+                                setAllowPilgrimNav(!val);
+                            }
+                        }}
+                        trackColor={{ false: '#E2E8F0', true: '#93C5FD' }}
+                        thumbColor={allowPilgrimNav ? '#2563EB' : '#CBD5E1'}
+                    />
+                </View>
+
                 <View style={[styles.messageActions, isRTL && { flexDirection: 'row-reverse' }]}>
                     <TouchableOpacity style={styles.messageActionBtn} onPress={() => setShowBroadcastModal(true)}>
-                        <Ionicons name="megaphone-outline" size={18} color="#2563EB" />
-                        <Text style={styles.messageActionText}>{t('broadcast_message')}</Text>
+                        <Ionicons name="megaphone-outline" size={16} color="#2563EB" />
+                        <Text style={styles.messageActionText} numberOfLines={1}>{t('broadcast_message')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.messageActionBtn} onPress={() => navigation.navigate('ModeratorMessagesScreen', { groupId, groupName })}>
-                        <Ionicons name="chatbubbles-outline" size={18} color="#2563EB" />
-                        <Text style={styles.messageActionText}>{t('sent_messages')}</Text>
+                        <Ionicons name="chatbubbles-outline" size={16} color="#2563EB" />
+                        <Text style={styles.messageActionText} numberOfLines={1}>{t('sent_messages')}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -315,43 +364,75 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                         })}
                         keyExtractor={item => item._id}
                         renderItem={({ item }) => (
-                            <TouchableOpacity
-                                style={[styles.pilgrimCard, selectedPilgrimId === item._id && styles.pilgrimCardSelected, isRTL && { flexDirection: 'row-reverse' }]}
-                                onPress={() => setSelectedPilgrimId(item._id)}
-                                activeOpacity={0.9}
+                            <Swipeable
+                                renderRightActions={() => renderRightActions(item._id, item.full_name)}
+                                overshootRight={false}
                             >
-                                <View style={[styles.pilgrimInfo, isRTL && { flexDirection: 'row-reverse' }]}>
-                                    <View style={[styles.avatarSmall, selectedPilgrimId === item._id && styles.avatarSmallSelected, { [isRTL ? 'marginLeft' : 'marginRight']: 12 }]}>
-                                        <Text style={styles.avatarTextSmall}>{item.full_name.charAt(0)}</Text>
+                                <TouchableOpacity
+                                    style={[styles.pilgrimCard, selectedPilgrimId === item._id && styles.pilgrimCardSelected, isRTL && { flexDirection: 'row-reverse' }]}
+                                    onPress={() => setSelectedPilgrimId(item._id)}
+                                    activeOpacity={0.9}
+                                >
+                                    <View style={[styles.pilgrimInfo, isRTL && { flexDirection: 'row-reverse' }]}>
+                                        <View style={[styles.avatarSmall, selectedPilgrimId === item._id && styles.avatarSmallSelected, { [isRTL ? 'marginLeft' : 'marginRight']: 12 }]}>
+                                            <Text style={styles.avatarTextSmall}>{item.full_name.charAt(0)}</Text>
+                                        </View>
+                                        <View style={[{ flex: 1 }, isRTL && { alignItems: 'flex-end' }]}>
+                                            <Text style={styles.pilgrimName} numberOfLines={1}>{item.full_name}</Text>
+                                            <Text style={styles.pilgrimId} numberOfLines={1}>{t('national_id')}: {item.national_id}</Text>
+                                            {item.location && (
+                                                <View style={[styles.statusIndicator, isRTL && { flexDirection: 'row-reverse' }]}>
+                                                    <View style={[styles.statusDot, { backgroundColor: '#10B981', [isRTL ? 'marginLeft' : 'marginRight']: 4 }]} />
+                                                    <Text style={styles.statusText}>{t('active')}</Text>
+                                                </View>
+                                            )}
+                                        </View>
                                     </View>
-                                    <View style={[{ flex: 1 }, isRTL && { alignItems: 'flex-end' }]}>
-                                        <Text style={styles.pilgrimName} numberOfLines={1}>{item.full_name}</Text>
-                                        <Text style={styles.pilgrimId} numberOfLines={1}>{t('national_id')}: {item.national_id}</Text>
+                                    <View style={[styles.pilgrimActions, isRTL && { flexDirection: 'row-reverse' }]}>
+                                        <TouchableOpacity style={styles.pilgrimIconBtn} onPress={() => { setProfilePilgrim(item); setShowProfileModal(true); }}>
+                                            <Ionicons name="person-outline" size={18} color="#475569" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[styles.pilgrimIconBtn, styles.pilgrimIconBtnPrimary]} onPress={() => { setSelectedPilgrimId(item._id); setDirectRecipientId(item._id); setDirectRecipientName(item.full_name); setShowDirectModal(true); }}>
+                                            <Ionicons name="megaphone-outline" size={18} color="white" />
+                                        </TouchableOpacity>
                                         {item.location && (
-                                            <View style={[styles.statusIndicator, isRTL && { flexDirection: 'row-reverse' }]}>
-                                                <View style={[styles.statusDot, { backgroundColor: '#10B981', [isRTL ? 'marginLeft' : 'marginRight']: 4 }]} />
-                                                <Text style={styles.statusText}>{t('active')}</Text>
-                                            </View>
+                                            <TouchableOpacity style={[styles.pilgrimIconBtn, { backgroundColor: '#10B981' }]} onPress={() => openNavigation(item.location!.lat, item.location!.lng, item.full_name)}>
+                                                <Ionicons name="navigate-outline" size={18} color="white" />
+                                            </TouchableOpacity>
                                         )}
                                     </View>
-                                </View>
-                                <View style={[styles.pilgrimActions, isRTL && { flexDirection: 'row-reverse' }]}>
-                                    <TouchableOpacity style={styles.pilgrimIconBtn} onPress={() => { setProfilePilgrim(item); setShowProfileModal(true); }}>
-                                        <Ionicons name="person-outline" size={18} color="#475569" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={[styles.pilgrimIconBtn, styles.pilgrimIconBtnPrimary]} onPress={() => { setSelectedPilgrimId(item._id); setDirectRecipientId(item._id); setDirectRecipientName(item.full_name); setShowDirectModal(true); }}>
-                                        <Ionicons name="megaphone-outline" size={18} color="white" />
-                                    </TouchableOpacity>
-                                </View>
-                            </TouchableOpacity>
+                                </TouchableOpacity>
+                            </Swipeable>
                         )}
-                        contentContainerStyle={{ paddingBottom: 100 }}
-                        ListEmptyComponent={<Text style={styles.emptyText}>{t('no_pilgrims_group')}</Text>}
-                        ListFooterComponent={
-                            <TouchableOpacity style={styles.deleteGroupButton} onPress={() => setShowDeleteGroupModal(true)}>
-                                <Text style={styles.deleteGroupText}>{t('delete_group_link')}</Text>
-                            </TouchableOpacity>
+                        contentContainerStyle={{ paddingBottom: 100, flexGrow: 1 }}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={() => { setRefreshing(true); fetchGroupDetails({ silent: true }); }}
+                                colors={['#2563EB']}
+                                tintColor="#2563EB"
+                            />
                         }
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <View style={styles.emptyIconCircle}>
+                                    <Ionicons name="people-outline" size={40} color="#94A3B8" />
+                                </View>
+                                <Text style={styles.emptyTitle}>{t('no_pilgrims_group')}</Text>
+                                <Text style={styles.emptySubtitle}>{t('add_pilgrims_hint') || 'Tap the + button below to add pilgrims'}</Text>
+                            </View>
+                        }
+                        ListFooterComponent={<View style={{ height: 20 }} />}
+                    />
+                )}
+
+                {callTarget && (
+                    <CallModal
+                        visible={callModalVisible}
+                        onClose={() => { setCallModalVisible(false); setCallTarget(null); }}
+                        isCaller={isCaller}
+                        remoteUser={callTarget}
+                        socket={socketService.getSocket()}
                     />
                 )}
             </View>
@@ -392,6 +473,12 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 submitPath="/messages/individual"
                 title={directRecipientName ? `${t('alert_sent_success')} ${directRecipientName}` : t('send_alert')}
                 onSuccess={() => showToast(t('alert_sent_success'), 'success')}
+                onCall={directRecipientId ? () => {
+                    setShowDirectModal(false);
+                    setCallTarget({ id: directRecipientId, name: directRecipientName });
+                    setIsCaller(true);
+                    setCallModalVisible(true);
+                } : undefined}
             />
 
             <Modal visible={showProfileModal} transparent={true} animationType="fade" onRequestClose={() => setShowProfileModal(false)}>
@@ -523,7 +610,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
             </Modal>
 
             <GroupCodeModal visible={showGroupCodeModal} onClose={() => setShowGroupCodeModal(false)} groupId={groupId} groupName={groupName} />
-        </View>
+        </GestureHandlerRootView>
     );
 }
 
@@ -606,9 +693,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
+        gap: 5,
         backgroundColor: '#EFF6FF',
         paddingVertical: 12,
+        paddingHorizontal: 8,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#DBEAFE',
@@ -616,7 +704,8 @@ const styles = StyleSheet.create({
     messageActionText: {
         color: '#2563EB',
         fontWeight: '600',
-        fontSize: 13,
+        fontSize: 12,
+        flexShrink: 1,
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -929,11 +1018,49 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 14,
     },
-    emptyText: {
-        textAlign: 'center',
+    navToggleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    navToggleLabel: {
+        fontSize: 13,
+        color: '#475569',
+        fontWeight: '500',
+        flexShrink: 1,
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 60,
+    },
+    emptyIconCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    emptyTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: '#475569',
+        marginBottom: 6,
+    },
+    emptySubtitle: {
+        fontSize: 14,
         color: '#94A3B8',
-        marginTop: 40,
-        fontSize: 15,
+        textAlign: 'center',
+        paddingHorizontal: 30,
     },
     deleteGroupButton: {
         marginTop: 40,
@@ -964,5 +1091,20 @@ const styles = StyleSheet.create({
     deletePilgrimButton: {
         padding: 8,
         marginLeft: 8,
+    },
+    swipeDeleteBtn: {
+        backgroundColor: '#EF4444',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        borderRadius: 12,
+        marginBottom: 8,
+        marginLeft: 8,
+    },
+    swipeDeleteText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 4,
     },
 });

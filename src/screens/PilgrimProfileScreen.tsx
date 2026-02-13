@@ -156,7 +156,7 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                                     .then(() => {
                                         showToast(t('verification_code_sent'), 'success', { title: t('code_sent') });
                                         navigation.navigate('VerifyEmail', {
-                                            email: profile.email,
+                                            email: profile.email!,
                                             isPilgrim: true,
                                             postVerifyAction: 'request-moderator'
                                         });

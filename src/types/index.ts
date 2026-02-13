@@ -15,8 +15,10 @@ export interface Pilgrim {
 export interface Group {
     _id: string;
     group_name: string;
+    group_code?: string;
     pilgrims: Pilgrim[];
     created_at: string;
+    allow_pilgrim_navigation?: boolean;
 }
 
 export interface GroupResponse {

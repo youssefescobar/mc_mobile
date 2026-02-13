@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, KeyboardAvoidingView, Platform, Dimensions, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, KeyboardAvoidingView, Platform, Dimensions, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api, setAuthToken } from '../services/api';
@@ -54,76 +54,82 @@ export default function LoginScreen({ navigation }: Props) {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
             >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                    <View style={{ flex: 1 }}>
-                        <View style={styles.headerContainer}>
-                            <Image
-                                source={require('../../assets/logo.jpeg')}
-                                style={styles.logo}
-                                resizeMode="contain"
-                            />
-                            <Text style={styles.appName}>Munawwara Care</Text>
-                            <Text style={styles.welcomeText}>{t('welcome')}</Text>
-                            <Text style={styles.subText}>{t('sign_in_subtitle')}</Text>
-                        </View>
-
-                        <View style={styles.formContainer}>
-                            <View style={styles.inputWrapper}>
-                                <Text style={styles.label}>{t('email_placeholder')}</Text>
-                                <TextInput
-                                    style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
-                                    placeholder={t('email_placeholder')}
-                                    placeholderTextColor="#999"
-                                    value={identifier}
-                                    onChangeText={setIdentifier}
-                                    autoCapitalize="none"
+                <ScrollView
+                    contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                        <View>
+                            <View style={styles.headerContainer}>
+                                <Image
+                                    source={require('../../assets/logo.jpeg')}
+                                    style={styles.logo}
+                                    resizeMode="contain"
                                 />
+                                <Text style={styles.appName}>Munawwara Care</Text>
+                                <Text style={styles.welcomeText}>{t('welcome')}</Text>
+                                <Text style={styles.subText}>{t('sign_in_subtitle')}</Text>
                             </View>
 
-                            <View style={styles.inputWrapper}>
-                                <Text style={styles.label}>{t('password_placeholder')}</Text>
-                                <TextInput
-                                    style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
-                                    placeholder="••••••••"
-                                    placeholderTextColor="#999"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry
-                                />
-                            </View>
+                            <View style={styles.formContainer}>
+                                <View style={styles.inputWrapper}>
+                                    <Text style={styles.label}>{t('email_placeholder')}</Text>
+                                    <TextInput
+                                        style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
+                                        placeholder={t('email_placeholder')}
+                                        placeholderTextColor="#999"
+                                        value={identifier}
+                                        onChangeText={setIdentifier}
+                                        autoCapitalize="none"
+                                    />
+                                </View>
 
-                            <TouchableOpacity
-                                style={[styles.loginButton, loading && styles.buttonDisabled]}
-                                onPress={handleLogin}
-                                disabled={loading}
-                            >
-                                <Text style={styles.loginButtonText}>{loading ? t('signing_in') : t('sign_in')}</Text>
-                            </TouchableOpacity>
+                                <View style={styles.inputWrapper}>
+                                    <Text style={styles.label}>{t('password_placeholder')}</Text>
+                                    <TextInput
+                                        style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
+                                        placeholder="••••••••"
+                                        placeholderTextColor="#999"
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        secureTextEntry
+                                    />
+                                </View>
 
-                            <View style={styles.divider}>
-                                <View style={styles.line} />
-                                <Text style={styles.dividerText}>{t('or_continue_with')}</Text>
-                                <View style={styles.line} />
-                            </View>
-
-                            <TouchableOpacity
-                                style={[styles.googleButton, i18n.language === 'ar' || i18n.language === 'ur' ? { flexDirection: 'row-reverse' } : null]}
-                                onPress={() => showToast(t('google_signin_coming_soon'), 'info', { title: t('coming_soon') })}
-                            >
-                                <Text style={[styles.googleButtonText, i18n.language === 'ar' || i18n.language === 'ur' ? { marginRight: 0, marginLeft: 10 } : null]}>G</Text>
-                                <Text style={styles.googleText}>{t('sign_in_google')}</Text>
-                            </TouchableOpacity>
-
-                            <View style={styles.footer}>
-                                <Text style={styles.footerText}>{t('dont_have_account')} </Text>
-                                <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-                                    <Text style={styles.signUpText}>{t('sign_up')}</Text>
+                                <TouchableOpacity
+                                    style={[styles.loginButton, loading && styles.buttonDisabled]}
+                                    onPress={handleLogin}
+                                    disabled={loading}
+                                >
+                                    <Text style={styles.loginButtonText}>{loading ? t('signing_in') : t('sign_in')}</Text>
                                 </TouchableOpacity>
-                            </View>
-                        </View>
 
-                    </View>
-                </TouchableWithoutFeedback>
+                                <View style={styles.divider}>
+                                    <View style={styles.line} />
+                                    <Text style={styles.dividerText}>{t('or_continue_with')}</Text>
+                                    <View style={styles.line} />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[styles.googleButton, i18n.language === 'ar' || i18n.language === 'ur' ? { flexDirection: 'row-reverse' } : null]}
+                                    onPress={() => showToast(t('google_signin_coming_soon'), 'info', { title: t('coming_soon') })}
+                                >
+                                    <Text style={[styles.googleButtonText, i18n.language === 'ar' || i18n.language === 'ur' ? { marginRight: 0, marginLeft: 10 } : null]}>G</Text>
+                                    <Text style={styles.googleText}>{t('sign_in_google')}</Text>
+                                </TouchableOpacity>
+
+                                <View style={styles.footer}>
+                                    <Text style={styles.footerText}>{t('dont_have_account')} </Text>
+                                    <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+                                        <Text style={styles.signUpText}>{t('sign_up')}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                            <View style={{ height: 30 }} />
+                        </View>
+                    </TouchableWithoutFeedback>
+                </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );

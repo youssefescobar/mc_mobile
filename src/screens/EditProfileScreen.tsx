@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator, ScrollView, Platform, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator, ScrollView, Platform, Alert, KeyboardAvoidingView, Animated } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,11 +8,13 @@ import { api, BASE_URL } from '../services/api';
 import { useToast } from '../components/ToastContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
+import { useIsRTL } from '../hooks/useIsRTL';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditProfile'>;
 
 export default function EditProfileScreen({ navigation }: Props) {
     const { t, i18n } = useTranslation();
+    const isRTL = useIsRTL();
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [age, setAge] = useState('');
@@ -23,6 +25,15 @@ export default function EditProfileScreen({ navigation }: Props) {
     const [initialLoading, setInitialLoading] = useState(true);
     const [isPilgrim, setIsPilgrim] = useState(false);
     const { showToast } = useToast();
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true,
+        }).start();
+    }, []);
 
     useEffect(() => {
         fetchProfile();
@@ -124,105 +135,119 @@ export default function EditProfileScreen({ navigation }: Props) {
         );
     }
 
-    const isRTL = i18n.language === 'ar' || i18n.language === 'ur';
     const alignStyle = { textAlign: isRTL ? 'right' : 'left' } as const;
 
     return (
         <View style={styles.container}>
-            <SafeAreaView style={styles.header} edges={['top']}>
+            <View style={styles.backgroundOrbOne} />
+            <View style={styles.backgroundOrbTwo} />
+            <SafeAreaView style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]} edges={['top']}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Text style={styles.backButtonText}>{t('cancel')}</Text>
+                    <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color="#1F2A44" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{t('edit_profile')}</Text>
                 <TouchableOpacity onPress={handleSave} disabled={loading} style={styles.saveButton}>
-                    {loading ? <ActivityIndicator size="small" color="#007AFF" /> : <Text style={styles.saveButtonText}>{t('save')}</Text>}
+                    {loading ? <ActivityIndicator size="small" color="#1F6FEB" /> : <Text style={styles.saveButtonText}>{t('save')}</Text>}
                 </TouchableOpacity>
             </SafeAreaView>
 
-            <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.imageContainer}>
-                    <View style={styles.imageWrapper}>
-                        {profileImage ? (
-                            <Image source={{ uri: profileImage }} style={styles.profileImage} />
-                        ) : (
-                            <View style={[styles.profileImage, styles.placeholderImage]}>
-                                <Text style={styles.placeholderText}>{name.charAt(0)}</Text>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] }}>
+                        <View style={styles.imageContainer}>
+                            <View style={styles.imageWrapper}>
+                                {profileImage ? (
+                                    <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                                ) : (
+                                    <View style={[styles.profileImage, styles.placeholderImage]}>
+                                        <Text style={styles.placeholderText}>{name.charAt(0)}</Text>
+                                    </View>
+                                )}
+                                <TouchableOpacity style={styles.editIconBadge} onPress={pickImage}>
+                                    <Ionicons name="camera" size={16} color="#1F6FEB" />
+                                </TouchableOpacity>
                             </View>
-                        )}
-                        <TouchableOpacity style={styles.editIconBadge} onPress={pickImage}>
-                            <Ionicons name="camera" size={16} color="#666" />
-                        </TouchableOpacity>
-                    </View>
-                    <TouchableOpacity onPress={pickImage}>
-                        <Text style={styles.changePhotoText}>{t('change_profile_photo')}</Text>
-                    </TouchableOpacity>
-                </View>
+                            <TouchableOpacity onPress={pickImage}>
+                                <Text style={styles.changePhotoText}>{t('change_profile_photo')}</Text>
+                            </TouchableOpacity>
+                        </View>
 
-                <View style={styles.form}>
-                    <Text style={styles.label}>{t('full_name')}</Text>
-                    <TextInput
-                        style={[styles.input, alignStyle]}
-                        value={name}
-                        onChangeText={setName}
-                        placeholder={t('full_name_placeholder')}
-                    />
-
-                    <Text style={styles.label}>{t('phone_number')}</Text>
-                    <TextInput
-                        style={[styles.input, { textAlign: 'left' }]} // Phone usually LTR
-                        value={phone}
-                        onChangeText={setPhone}
-                        placeholder={t('phone_number_placeholder')}
-                        keyboardType="phone-pad"
-                    />
-
-                    {isPilgrim && (
-                        <>
-                            <Text style={styles.label}>{t('age_optional')}</Text>
+                        <View style={styles.form}>
+                            <Text style={styles.label}>{t('full_name')}</Text>
                             <TextInput
                                 style={[styles.input, alignStyle]}
-                                value={age}
-                                onChangeText={setAge}
-                                placeholder={t('age_placeholder')}
-                                keyboardType="numeric"
+                                value={name}
+                                onChangeText={setName}
+                                placeholder={t('full_name_placeholder')}
                             />
 
-                            <Text style={styles.label}>{t('gender_optional')}</Text>
-                            <View style={styles.genderContainer}>
-                                <TouchableOpacity
-                                    style={[styles.genderButton, gender === 'male' && styles.genderButtonActive]}
-                                    onPress={() => setGender('male')}
-                                >
-                                    <Text style={[styles.genderButtonText, gender === 'male' && styles.genderButtonTextActive]}>{t('male')}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.genderButton, gender === 'female' && styles.genderButtonActive]}
-                                    onPress={() => setGender('female')}
-                                >
-                                    <Text style={[styles.genderButtonText, gender === 'female' && styles.genderButtonTextActive]}>{t('female')}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.genderButton, gender === 'other' && styles.genderButtonActive]}
-                                    onPress={() => setGender('other')}
-                                >
-                                    <Text style={[styles.genderButtonText, gender === 'other' && styles.genderButtonTextActive]}>{t('other')}</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <Text style={styles.label}>{t('medical_history')}</Text>
-
+                            <Text style={styles.label}>{t('phone_number')}</Text>
                             <TextInput
-                                style={[styles.input, styles.textArea, alignStyle]}
-                                value={medicalHistory}
-                                onChangeText={setMedicalHistory}
-                                placeholder={t('medical_history_placeholder')}
-                                multiline
-                                numberOfLines={4}
+                                style={[styles.input, { textAlign: 'left' }]} // Phone usually LTR
+                                value={phone}
+                                onChangeText={setPhone}
+                                placeholder={t('phone_number_placeholder')}
+                                keyboardType="phone-pad"
                             />
-                        </>
-                    )}
-                </View>
-            </ScrollView>
+
+                            {isPilgrim && (
+                                <>
+                                    <Text style={styles.label}>{t('age_optional')}</Text>
+                                    <TextInput
+                                        style={[styles.input, alignStyle]}
+                                        value={age}
+                                        onChangeText={setAge}
+                                        placeholder={t('age_placeholder')}
+                                        keyboardType="numeric"
+                                    />
+
+                                    <Text style={styles.label}>{t('gender_optional')}</Text>
+                                    <View style={styles.genderContainer}>
+                                        <TouchableOpacity
+                                            style={[styles.genderButton, gender === 'male' && styles.genderButtonActive]}
+                                            onPress={() => setGender('male')}
+                                        >
+                                            <Text style={[styles.genderButtonText, gender === 'male' && styles.genderButtonTextActive]}>{t('male')}</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.genderButton, gender === 'female' && styles.genderButtonActive]}
+                                            onPress={() => setGender('female')}
+                                        >
+                                            <Text style={[styles.genderButtonText, gender === 'female' && styles.genderButtonTextActive]}>{t('female')}</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.genderButton, gender === 'other' && styles.genderButtonActive]}
+                                            onPress={() => setGender('other')}
+                                        >
+                                            <Text style={[styles.genderButtonText, gender === 'other' && styles.genderButtonTextActive]}>{t('other')}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <Text style={styles.label}>{t('medical_history')}</Text>
+
+                                    <TextInput
+                                        style={[styles.input, styles.textArea, alignStyle]}
+                                        value={medicalHistory}
+                                        onChangeText={setMedicalHistory}
+                                        placeholder={t('medical_history_placeholder')}
+                                        multiline
+                                        numberOfLines={4}
+                                    />
+                                </>
+                            )}
+                        </View>
+                    </Animated.View>
+                    <View style={{ height: 40 }} />
+                </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 }
@@ -230,146 +255,175 @@ export default function EditProfileScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F6F7FB',
+    },
+    backgroundOrbOne: {
+        position: 'absolute',
+        top: -80,
+        right: -60,
+        width: 220,
+        height: 220,
+        borderRadius: 110,
+        backgroundColor: '#E8EEFF',
+        opacity: 0.6,
+    },
+    backgroundOrbTwo: {
+        position: 'absolute',
+        top: 200,
+        left: -80,
+        width: 180,
+        height: 180,
+        borderRadius: 90,
+        backgroundColor: '#EAF7F2',
+        opacity: 0.7,
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: '#F6F7FB',
     },
     header: {
-        backgroundColor: 'white',
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingBottom: 15,
+        paddingHorizontal: 18,
+        paddingBottom: 14,
         paddingTop: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
     },
     backButton: {
-        padding: 5,
-    },
-    backButtonText: {
-        fontSize: 16,
-        color: '#666',
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 20,
     },
     saveButton: {
-        padding: 5,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: '#1F6FEB',
+        borderRadius: 12,
     },
     saveButtonText: {
-        fontSize: 16,
-        color: '#007AFF',
-        fontWeight: 'bold',
+        fontSize: 15,
+        color: 'white',
+        fontWeight: '700',
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1F2A44',
     },
     content: {
         padding: 20,
     },
     imageContainer: {
         alignItems: 'center',
-        marginBottom: 30,
-        marginTop: 10,
+        marginBottom: 24,
+        marginTop: 8,
     },
     imageWrapper: {
         position: 'relative',
-        marginBottom: 10,
+        marginBottom: 12,
     },
     profileImage: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+        width: 96,
+        height: 96,
+        borderRadius: 48,
         backgroundColor: '#E1E1E1',
+        borderWidth: 3,
+        borderColor: '#F6F7FB',
+        shadowColor: '#1F2A44',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 14,
+        elevation: 5,
     },
     placeholderImage: {
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#007AFF',
+        backgroundColor: '#E7EEFF',
     },
     placeholderText: {
-        fontSize: 40,
-        color: 'white',
-        fontWeight: 'bold',
+        fontSize: 36,
+        color: '#1F6FEB',
+        fontWeight: '700',
     },
     editIconBadge: {
         position: 'absolute',
-        bottom: 0,
-        right: 0,
+        bottom: 2,
+        right: 2,
         backgroundColor: 'white',
-        borderRadius: 15,
-        width: 30,
-        height: 30,
+        borderRadius: 14,
+        width: 28,
+        height: 28,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#ddd',
-        elevation: 2,
-        shadowColor: '#000',
+        borderColor: '#EDF0F6',
+        elevation: 3,
+        shadowColor: '#1F2A44',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 2,
-    },
-    editIconText: {
-        fontSize: 14,
+        shadowRadius: 4,
     },
     changePhotoText: {
-        color: '#007AFF',
-        fontSize: 16,
+        color: '#1F6FEB',
+        fontSize: 15,
         fontWeight: '600',
     },
     form: {
         backgroundColor: 'white',
-        borderRadius: 12,
+        borderRadius: 18,
         padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowColor: '#1F2A44',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#EDF0F6',
     },
     label: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#333',
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#7B8191',
         marginBottom: 8,
-        marginTop: 10,
+        marginTop: 14,
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
     },
     input: {
-        backgroundColor: '#f9f9f9',
-        borderRadius: 8,
-        padding: 12,
+        backgroundColor: '#F8F9FC',
+        borderRadius: 12,
+        padding: 14,
         fontSize: 16,
-        color: '#333',
+        color: '#1F2A44',
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: '#EDF0F6',
     },
     genderContainer: {
         flexDirection: 'row',
         gap: 10,
-        marginBottom: 10,
+        marginBottom: 6,
     },
     genderButton: {
         flex: 1,
         paddingVertical: 12,
         paddingHorizontal: 16,
-        borderRadius: 8,
-        backgroundColor: '#f9f9f9',
+        borderRadius: 12,
+        backgroundColor: '#F8F9FC',
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: '#EDF0F6',
         alignItems: 'center',
     },
     genderButtonActive: {
-        backgroundColor: '#007AFF',
-        borderColor: '#007AFF',
+        backgroundColor: '#1F6FEB',
+        borderColor: '#1F6FEB',
     },
     genderButtonText: {
         fontSize: 14,
-        color: '#666',
+        color: '#7B8191',
         fontWeight: '600',
     },
     genderButtonTextActive: {
@@ -378,6 +432,6 @@ const styles = StyleSheet.create({
     textArea: {
         minHeight: 100,
         textAlignVertical: 'top',
-        paddingTop: 12,
+        paddingTop: 14,
     },
 });

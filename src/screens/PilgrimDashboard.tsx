@@ -11,13 +11,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { useIsRTL } from '../hooks/useIsRTL';
 import { socketService } from '../services/socket';
+import CallModal from '../components/CallModal';
+import { getUserId, getUserName } from '../services/user';
+import { openNavigation } from '../utils/openNavigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PilgrimDashboard'>;
 
 interface GroupInfo {
     group_name: string;
     group_id: string;
+    allow_pilgrim_navigation?: boolean;
     moderators: {
         _id: string;
         full_name: string;
@@ -38,7 +43,32 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     const [unreadCount, setUnreadCount] = useState(0);
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const sheetAnim = useRef(new Animated.Value(40)).current;
+
     const { showToast } = useToast();
+    // Call state
+    const [callModalVisible, setCallModalVisible] = useState(false);
+    const [callTarget, setCallTarget] = useState<{ id: string; name: string } | null>(null);
+    const [isCaller, setIsCaller] = useState(false);
+    // Incoming call handler
+    useEffect(() => {
+        if (!socketService.socket) return;
+        const handleCallOffer = async ({ offer, from }: { offer: any; from: string }) => {
+            // Get caller name if possible (not always available, fallback to 'Moderator')
+            let name = 'Moderator';
+            // Optionally, fetch name from groupInfo.moderators
+            if (groupInfo && groupInfo.moderators) {
+                const mod = groupInfo.moderators.find(m => m._id === from);
+                if (mod) name = mod.full_name;
+            }
+            setCallTarget({ id: from, name });
+            setIsCaller(false);
+            setCallModalVisible(true);
+        };
+        socketService.socket.on('call-offer', handleCallOffer);
+        return () => {
+            socketService.socket?.off('call-offer', handleCallOffer);
+        };
+    }, [groupInfo]);
 
     // Initial setup & Background interval
     useEffect(() => {
@@ -75,7 +105,10 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         return () => {
             // socketService.disconnect(); // Keep connected?
         };
+    }, []);
 
+    // Animations
+    useEffect(() => {
         // Start SOS pulse animation
         Animated.loop(
             Animated.sequence([
@@ -97,12 +130,6 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
             duration: 450,
             useNativeDriver: true,
         }).start();
-
-        return () => {
-            if (locationSubscription) {
-                locationSubscription.remove();
-            }
-        };
     }, []);
 
     // Refresh group info and unread count when screen comes into focus
@@ -256,7 +283,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         return 'battery-dead';
     };
 
-    const isRTL = i18n.language === 'ar' || i18n.language === 'ur';
+    const isRTL = useIsRTL();
 
     return (
         <View style={styles.container}>
@@ -275,6 +302,17 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                     }
                 />
             </View>
+
+            {/* Call Modal for incoming/outgoing calls */}
+            {callTarget && (
+                <CallModal
+                    visible={callModalVisible}
+                    onClose={() => { setCallModalVisible(false); setCallTarget(null); }}
+                    isCaller={isCaller}
+                    remoteUser={callTarget}
+                    socket={socketService.getSocket()}
+                />
+            )}
 
             {/* Header overlay */}
             <SafeAreaView style={styles.header} edges={['top']}>
@@ -354,6 +392,19 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                                 </View>
                             )}
                         </TouchableOpacity>
+                        {groupInfo.allow_pilgrim_navigation && groupInfo.moderators[0]?.current_latitude && groupInfo.moderators[0]?.current_longitude && (
+                            <TouchableOpacity
+                                style={[styles.navigateModButton, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                                onPress={() => openNavigation(
+                                    groupInfo.moderators[0].current_latitude!,
+                                    groupInfo.moderators[0].current_longitude!,
+                                    groupInfo.moderators[0].full_name
+                                )}
+                            >
+                                <Ionicons name="navigate-outline" size={16} color="white" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
+                                <Text style={styles.navigateModButtonText}>{t('navigate_to_moderator') || 'Navigate to Moderator'}</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
 
@@ -546,5 +597,19 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '800',
         letterSpacing: 1,
+    },
+    navigateModButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#10B981',
+        borderRadius: 10,
+        paddingVertical: 10,
+        marginTop: 10,
+    },
+    navigateModButtonText: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '600',
     },
 });

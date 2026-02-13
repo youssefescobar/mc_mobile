@@ -13,6 +13,8 @@ interface Props {
     title?: string;
     submitPath?: string;
     recipientId?: string | null;
+    /** If provided, shows a "Call" action button beside the send button */
+    onCall?: () => void;
 }
 
 export default function ComposeMessageModal({
@@ -22,7 +24,8 @@ export default function ComposeMessageModal({
     onSuccess,
     title = 'Broadcast Message',
     submitPath = '/messages',
-    recipientId = null
+    recipientId = null,
+    onCall,
 }: Props) {
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
@@ -68,7 +71,7 @@ export default function ComposeMessageModal({
 
     const stopRecording = async () => {
         if (!recording) return;
-        setRecordingStatus('idle'); // Temporary state while processing
+        setRecordingStatus('idle');
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
         setAudioUri(uri);
@@ -79,21 +82,17 @@ export default function ComposeMessageModal({
     const playRecording = async () => {
         if (!audioUri) return;
         try {
-            // If already playing, pause it
             if (sound && isPlaying) {
                 await sound.pauseAsync();
                 setIsPlaying(false);
                 return;
             }
-
-            // If paused, resume
             if (sound && !isPlaying) {
                 await sound.playAsync();
                 setIsPlaying(true);
                 return;
             }
 
-            // Set audio mode to play through speaker (not ear speaker)
             await Audio.setAudioModeAsync({
                 allowsRecordingIOS: false,
                 playsInSilentModeIOS: true,
@@ -163,16 +162,8 @@ export default function ComposeMessageModal({
                 });
             }
 
-            // Note: Use a modified api client or explicit headers for multipart if needed, 
-            // but usually axios handles FormData correctly if passed directly.
-            // Check api service implementation. Assuming it handles headers or we set Content-Type: multipart/form-data
-            // Actually, axios often requires explicit header removal or specific setting for FormData in RN.
-            // Let's rely on standard axios for now.
-
             await api.post(submitPath, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
+                headers: { 'Content-Type': 'multipart/form-data' },
             });
 
             onSuccess();
@@ -203,10 +194,19 @@ export default function ComposeMessageModal({
                     >
                         <TouchableWithoutFeedback>
                             <View style={styles.content}>
+                                {/* Handle bar */}
+                                <View style={styles.handleBar} />
+
+                                {/* Header */}
                                 <View style={styles.header}>
-                                    <Text style={styles.title}>{title}</Text>
-                                    <TouchableOpacity onPress={onClose}>
-                                        <Ionicons name="close" size={24} color="#666" />
+                                    <View style={styles.headerLeft}>
+                                        <View style={styles.headerIconBg}>
+                                            <Ionicons name={recipientId ? 'person' : 'megaphone'} size={16} color="#2563EB" />
+                                        </View>
+                                        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                                        <Ionicons name="close" size={22} color="#64748B" />
                                     </TouchableOpacity>
                                 </View>
 
@@ -214,23 +214,27 @@ export default function ComposeMessageModal({
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={false}
                                 >
+                                    {/* Mode tabs */}
                                     <View style={styles.tabs}>
                                         <TouchableOpacity
                                             style={[styles.tab, mode === 'text' && styles.activeTab]}
                                             onPress={() => setMode('text')}
                                         >
+                                            <Ionicons name="chatbubble-outline" size={15} color={mode === 'text' ? '#2563EB' : '#94A3B8'} style={{ marginRight: 5 }} />
                                             <Text style={[styles.tabText, mode === 'text' && styles.activeTabText]}>Text</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[styles.tab, mode === 'voice' && styles.activeTab]}
                                             onPress={() => setMode('voice')}
                                         >
+                                            <Ionicons name="mic-outline" size={15} color={mode === 'voice' ? '#2563EB' : '#94A3B8'} style={{ marginRight: 5 }} />
                                             <Text style={[styles.tabText, mode === 'voice' && styles.activeTabText]}>Voice</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[styles.tab, mode === 'tts' && styles.activeTab]}
                                             onPress={() => setMode('tts')}
                                         >
+                                            <Ionicons name="volume-high-outline" size={15} color={mode === 'tts' ? '#2563EB' : '#94A3B8'} style={{ marginRight: 5 }} />
                                             <Text style={[styles.tabText, mode === 'tts' && styles.activeTabText]}>TTS</Text>
                                         </TouchableOpacity>
                                     </View>
@@ -240,6 +244,7 @@ export default function ComposeMessageModal({
                                             <TextInput
                                                 style={styles.input}
                                                 placeholder={mode === 'tts' ? "Type message to convert to speech..." : "Type your message..."}
+                                                placeholderTextColor="#94A3B8"
                                                 value={message}
                                                 onChangeText={setMessage}
                                                 multiline
@@ -293,13 +298,31 @@ export default function ComposeMessageModal({
                                         </View>
                                     )}
 
-                                    <TouchableOpacity
-                                        style={[styles.sendButton, sending && styles.disabled]}
-                                        onPress={handleSend}
-                                        disabled={sending}
-                                    >
-                                        {sending ? <ActivityIndicator color="white" /> : <Text style={styles.sendText}>Send Broadcast</Text>}
-                                    </TouchableOpacity>
+                                    {/* Action buttons */}
+                                    <View style={styles.actionRow}>
+                                        {onCall && (
+                                            <TouchableOpacity style={styles.callButton} onPress={onCall} activeOpacity={0.8}>
+                                                <Ionicons name="call" size={18} color="white" />
+                                            </TouchableOpacity>
+                                        )}
+                                        <TouchableOpacity
+                                            style={[styles.sendButton, sending && styles.disabled, onCall && { flex: 1 }]}
+                                            onPress={handleSend}
+                                            disabled={sending}
+                                            activeOpacity={0.8}
+                                        >
+                                            {sending ? (
+                                                <ActivityIndicator color="white" />
+                                            ) : (
+                                                <View style={styles.sendContent}>
+                                                    <Ionicons name="send" size={16} color="white" style={{ marginRight: 8 }} />
+                                                    <Text style={styles.sendText}>
+                                                        {recipientId ? 'Send Alert' : 'Send Broadcast'}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
                                 </ScrollView>
                             </View>
                         </TouchableWithoutFeedback>
@@ -313,7 +336,7 @@ export default function ComposeMessageModal({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.5)',
         justifyContent: 'flex-end',
     },
     keyboardView: {
@@ -321,10 +344,19 @@ const styles = StyleSheet.create({
     },
     content: {
         backgroundColor: 'white',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 24,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
         minHeight: 400,
+    },
+    handleBar: {
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: '#E2E8F0',
+        alignSelf: 'center',
+        marginBottom: 16,
     },
     header: {
         flexDirection: 'row',
@@ -332,47 +364,77 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 20,
     },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    headerIconBg: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: '#EFF6FF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
     title: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#1F2937',
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#0F172A',
+        flex: 1,
+    },
+    closeBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     tabs: {
         flexDirection: 'row',
-        marginBottom: 24,
-        backgroundColor: '#F3F4F6',
-        borderRadius: 8,
+        marginBottom: 20,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
         padding: 4,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
     tab: {
         flex: 1,
+        flexDirection: 'row',
         paddingVertical: 10,
         alignItems: 'center',
-        borderRadius: 6,
+        justifyContent: 'center',
+        borderRadius: 8,
     },
     activeTab: {
         backgroundColor: 'white',
-        shadowColor: 'black',
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 1 },
+        shadowRadius: 3,
         elevation: 1,
     },
     tabText: {
         fontWeight: '600',
-        color: '#6B7280',
+        fontSize: 13,
+        color: '#94A3B8',
     },
     activeTabText: {
         color: '#2563EB',
     },
     input: {
-        backgroundColor: '#F9FAFB',
+        backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: '#E2E8F0',
         borderRadius: 12,
         padding: 16,
         height: 120,
         textAlignVertical: 'top',
-        fontSize: 16,
+        fontSize: 15,
+        color: '#0F172A',
         marginBottom: 20,
     },
     voiceContainer: {
@@ -390,12 +452,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 12,
         elevation: 4,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
     },
     recording: {
         backgroundColor: '#EF4444',
+        shadowColor: '#EF4444',
     },
     hint: {
-        color: '#6B7280',
+        color: '#64748B',
         fontSize: 14,
     },
     recordedControls: {
@@ -411,19 +478,48 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: '#2563EB',
     },
+    actionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginTop: 4,
+    },
+    callButton: {
+        width: 50,
+        height: 50,
+        borderRadius: 14,
+        backgroundColor: '#10B981',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#10B981',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 3,
+    },
     sendButton: {
         backgroundColor: '#2563EB',
-        borderRadius: 12,
-        padding: 16,
+        borderRadius: 14,
+        paddingVertical: 15,
         alignItems: 'center',
-        marginTop: 10, // Ensure spacing check
+        flex: 1,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+        elevation: 3,
     },
     disabled: {
         backgroundColor: '#93C5FD',
+        shadowOpacity: 0,
+    },
+    sendContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     sendText: {
         color: 'white',
-        fontWeight: 'bold',
+        fontWeight: '700',
         fontSize: 16,
     },
     urgentContainer: {
@@ -439,7 +535,7 @@ const styles = StyleSheet.create({
         height: 24,
         borderWidth: 2,
         borderColor: '#2563EB',
-        borderRadius: 4,
+        borderRadius: 6,
         marginRight: 10,
         justifyContent: 'center',
         alignItems: 'center',
@@ -448,13 +544,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#2563EB',
     },
     checkboxLabel: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#1F2937',
         fontWeight: '500',
     },
     urgentHint: {
         fontSize: 12,
-        color: '#6B7280',
+        color: '#64748B',
         marginLeft: 34,
     },
 });
