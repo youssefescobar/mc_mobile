@@ -22,7 +22,12 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDUMMY_KEY_FOR_TESTING_ONLY"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
