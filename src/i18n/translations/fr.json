@@ -266,5 +266,12 @@
     "password_too_short": "Le mot de passe doit comporter au moins 6 caractères",
     "delete": "Supprimer",
     "delete_group_link": "Supprimer le groupe",
-    "failed_resend_code": "Échec du renvoi du code"
+    "failed_resend_code": "Échec du renvoi du code",
+    "navigate_to_moderator": "Naviguer vers le modérateur",
+    "invalid_phone_number": "Numéro de téléphone invalide",
+    "national_id_label": "Carte d'identité nationale / Iqama",
+    "passport_label": "Passeport",
+    "national_id_or_passport": "Carte d'identité nationale ou Passeport",
+    "invalid_id": "Numéro d'identité invalide",
+    "invalid_passport": "Numéro de passeport invalide"
 }

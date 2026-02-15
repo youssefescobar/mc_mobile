@@ -266,5 +266,12 @@
     "password_too_short": "Kata sandi harus minimal 6 karakter",
     "delete": "Hapus",
     "delete_group_link": "Hapus Grup",
-    "failed_resend_code": "Gagal mengirim ulang kode"
+    "failed_resend_code": "Gagal mengirim ulang kode",
+    "navigate_to_moderator": "Navigasi ke Moderator",
+    "invalid_phone_number": "Nomor Telepon Tidak Valid",
+    "national_id_label": "KTP Nasional / Iqama",
+    "passport_label": "Paspor",
+    "national_id_or_passport": "KTP Nasional atau Paspor",
+    "invalid_id": "Nomor Identitas Tidak Valid",
+    "invalid_passport": "Nomor Paspor Tidak Valid"
 }

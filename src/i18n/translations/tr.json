@@ -266,5 +266,12 @@
     "password_too_short": "Şifre en az 6 karakter olmalıdır",
     "delete": "Sil",
     "delete_group_link": "Grubu Sil",
-    "failed_resend_code": "Kod yeniden gönderilemedi"
+    "failed_resend_code": "Kod yeniden gönderilemedi",
+    "navigate_to_moderator": "Moderatöre Git",
+    "invalid_phone_number": "Geçersiz Telefon Numarası",
+    "national_id_label": "Ulusal Kimlik / İkamet",
+    "passport_label": "Pasaport",
+    "national_id_or_passport": "Ulusal Kimlik veya Pasaport",
+    "invalid_id": "Geçersiz Kimlik Numarası",
+    "invalid_passport": "Geçersiz Pasaport Numarası"
 }

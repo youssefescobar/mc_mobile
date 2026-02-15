@@ -268,5 +268,12 @@
     "delete_group_link": "Delete Group",
     "failed_resend_code": "Failed to resend code",
     "share_location": "Share Location",
-    "pilgrim_location": "Pilgrim Location"
+    "pilgrim_location": "Pilgrim Location",
+    "navigate_to_moderator": "Navigate to Moderator",
+    "invalid_phone_number": "Invalid Phone Number",
+    "national_id_label": "National ID / Iqama",
+    "passport_label": "Passport",
+    "national_id_or_passport": "National ID or Passport",
+    "invalid_id": "Invalid National ID",
+    "invalid_passport": "Invalid Passport Number"
 }

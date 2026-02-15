@@ -268,5 +268,12 @@
     "delete_group_link": "حذف المجموعة",
     "failed_resend_code": "فشل في إعادة إرسال الرمز",
     "share_location": "مشاركة الموقع",
-    "pilgrim_location": "موقع الحاج"
+    "pilgrim_location": "موقع الحاج",
+    "navigate_to_moderator": "التوجه للمشرف",
+    "invalid_phone_number": "رقم الهاتف غير صحيح",
+    "national_id_label": "الهوية الوطنية / الإقامة",
+    "passport_label": "جواز السفر",
+    "national_id_or_passport": "الهوية الوطنية أو جواز السفر",
+    "invalid_id": "رقم الهوية غير صحيح",
+    "invalid_passport": "رقم جواز السفر غير صحيح"
 }

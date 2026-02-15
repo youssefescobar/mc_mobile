@@ -266,5 +266,12 @@
     "password_too_short": "پاس ورڈ کم از کم 6 حروف کا ہونا چاہیے",
     "delete": "حذف کریں",
     "delete_group_link": "گروپ حذف کریں",
-    "failed_resend_code": "کوڈ دوبارہ بھیجنے میں ناکامی"
+    "failed_resend_code": "کوڈ دوبارہ بھیجنے میں ناکامی",
+    "navigate_to_moderator": "ماڈریٹر کی طرف جائیں",
+    "invalid_phone_number": "غلط فون نمبر",
+    "national_id_label": "قومی شناختی کارڈ / اقامہ",
+    "passport_label": "پاسپورٹ",
+    "national_id_or_passport": "قومی شناختی کارڈ یا پاسپورٹ",
+    "invalid_id": "غلط شناختی نمبر",
+    "invalid_passport": "غلط پاسپورٹ نمبر"
 }

@@ -21,21 +21,42 @@ const LANGUAGES: LanguageOption[] = [
     { label: 'Turkish', value: 'tr', flag: '🇹🇷' },
 ];
 
+import { PhoneNumberUtil } from 'google-libphonenumber';
+
+const phoneUtil = PhoneNumberUtil.getInstance();
+
 const COUNTRY_CODES = [
-    { code: '+966', flag: '🇸🇦' },
-    { code: '+971', flag: '🇦🇪' },
-    { code: '+20', flag: '🇪🇬' },
-    { code: '+92', flag: '🇵🇰' },
-    { code: '+91', flag: '🇮🇳' },
-    { code: '+62', flag: '🇮🇩' },
-    { code: '+1', flag: '🇺🇸' },
-    { code: '+44', flag: '🇬🇧' },
+    { code: '+966', flag: '🇸🇦', region: 'SA', name: 'Saudi Arabia' },
+    { code: '+971', flag: '🇦🇪', region: 'AE', name: 'UAE' },
+    { code: '+20', flag: '🇪🇬', region: 'EG', name: 'Egypt' },
+    { code: '+92', flag: '🇵🇰', region: 'PK', name: 'Pakistan' },
+    { code: '+91', flag: '🇮🇳', region: 'IN', name: 'India' },
+    { code: '+62', flag: '🇮🇩', region: 'ID', name: 'Indonesia' },
+    { code: '+90', flag: '🇹🇷', region: 'TR', name: 'Turkey' },
+    { code: '+1', flag: '🇺🇸', region: 'US', name: 'USA' },
+    { code: '+44', flag: '🇬🇧', region: 'GB', name: 'UK' },
+    { code: '+33', flag: '🇫🇷', region: 'FR', name: 'France' },
+    { code: '+60', flag: '🇲🇾', region: 'MY', name: 'Malaysia' },
+    { code: '+965', flag: '🇰🇼', region: 'KW', name: 'Kuwait' },
+    { code: '+973', flag: '🇧🇭', region: 'BH', name: 'Bahrain' },
+    { code: '+974', flag: '🇶🇦', region: 'QA', name: 'Qatar' },
+    { code: '+968', flag: '🇴🇲', region: 'OM', name: 'Oman' },
+    { code: '+962', flag: '🇯🇴', region: 'JO', name: 'Jordan' },
+    { code: '+212', flag: '🇲🇦', region: 'MA', name: 'Morocco' },
+    { code: '+213', flag: '🇩🇿', region: 'DZ', name: 'Algeria' },
+    { code: '+216', flag: '🇹🇳', region: 'TN', name: 'Tunisia' },
+    { code: '+964', flag: '🇮🇶', region: 'IQ', name: 'Iraq' },
+    { code: '+880', flag: '🇧🇩', region: 'BD', name: 'Bangladesh' },
+    { code: '+234', flag: '🇳🇬', region: 'NG', name: 'Nigeria' },
 ];
+
+import { isValidSaudiID, isValidPassport } from '../utils/validation';
 
 export default function SignUpScreen({ navigation }: Props) {
     const { t, i18n } = useTranslation();
     const [fullName, setFullName] = useState('');
     const [nationalId, setNationalId] = useState('');
+    const [identityType, setIdentityType] = useState<'national_id' | 'passport'>('national_id');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [selectedCountryCode, setSelectedCountryCode] = useState(COUNTRY_CODES[0]);
     const [password, setPassword] = useState('');
@@ -57,9 +78,73 @@ export default function SignUpScreen({ navigation }: Props) {
         changeLanguage(lang.value);
     };
 
+    const validatePhoneNumber = (phone: string, regionCode: string): boolean => {
+        try {
+            const number = phoneUtil.parseAndKeepRawInput(phone, regionCode);
+            return phoneUtil.isValidNumber(number);
+        } catch (error) {
+            return false;
+        }
+    };
+
+    const [phoneError, setPhoneError] = useState(false);
+    const [nameError, setNameError] = useState(false);
+    const [idError, setIdError] = useState(false);
+    const [passwordError, setPasswordError] = useState(false);
+
     const handleSignUp = async () => {
-        if (!fullName || !nationalId || !phoneNumber || !password) {
-            showToast(t('fill_required'), 'error', { title: t('missing_fields') });
+        // Reset all errors
+        setPhoneError(false);
+        setNameError(false);
+        setIdError(false);
+        setPasswordError(false);
+
+        let isValid = true;
+
+        if (!fullName) {
+            setNameError(true);
+            isValid = false;
+        }
+
+        // Validate ID based on type
+        if (!nationalId) {
+            setIdError(true);
+            isValid = false;
+        } else {
+            if (identityType === 'national_id') {
+                if (!isValidSaudiID(nationalId)) {
+                    setIdError(true);
+                    isValid = false;
+                }
+            } else {
+                if (!isValidPassport(nationalId)) {
+                    setIdError(true);
+                    isValid = false;
+                }
+            }
+        }
+
+        if (!password) {
+            setPasswordError(true);
+            isValid = false;
+        }
+        if (!phoneNumber) {
+            // Check if empty, separate from checking validity later
+            // But actually validatePhoneNumber checks emptiness implicitly or we can just rely on the next check.
+            // Let's just say if empty, it's invalid phone.
+            // Logic below handles phone validity.
+        }
+
+        // Validate Phone Number
+        if (!validatePhoneNumber(phoneNumber, selectedCountryCode.region)) {
+            setPhoneError(true);
+            isValid = false;
+        }
+
+        if (!isValid) {
+            // Optional: Show a generic toast or just rely on red borders. 
+            // User requested "instead of getting a toast", so we might skip it or show a very subtle one.
+            // I will skip the "fill_required" toast as per request.
             return;
         }
 
@@ -115,30 +200,60 @@ export default function SignUpScreen({ navigation }: Props) {
         onClose: () => void,
         data: any[],
         onSelect: (item: any) => void,
-        renderItem: (item: any) => React.ReactElement
-    ) => (
-        <Modal visible={visible} transparent animationType="slide">
-            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
-                <View style={styles.modalContent}>
-                    <View style={[styles.modalHeader, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
-                        <Text style={styles.modalTitle}>{t('select_option')}</Text>
-                        <TouchableOpacity onPress={onClose}>
-                            <Ionicons name="close" size={24} color="#333" />
-                        </TouchableOpacity>
-                    </View>
-                    <FlatList
-                        data={data}
-                        keyExtractor={(item, index) => index.toString()}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity style={[styles.pickerItem, (i18n.language === 'ar' || i18n.language === 'ur') && { alignItems: 'flex-end' }]} onPress={() => { onSelect(item); onClose(); }}>
-                                {renderItem(item)}
+        renderItem: (item: any) => React.ReactElement,
+        enableSearch: boolean = false
+    ) => {
+        const [searchText, setSearchText] = useState('');
+
+        const filteredData = data.filter(item => {
+            if (!enableSearch || !searchText) return true;
+            const searchLower = searchText.toLowerCase();
+            return (
+                (item.name && item.name.toLowerCase().includes(searchLower)) ||
+                (item.label && item.label.toLowerCase().includes(searchLower)) ||
+                (item.code && item.code.toLowerCase().includes(searchLower))
+            );
+        });
+
+        return (
+            <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+                    <View style={[styles.modalContent, { height: '80%', maxHeight: '80%' }]}>
+                        <View style={[styles.modalHeader, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
+                            <Text style={styles.modalTitle}>{t('select_option')}</Text>
+                            <TouchableOpacity onPress={onClose}>
+                                <Ionicons name="close" size={24} color="#333" />
                             </TouchableOpacity>
+                        </View>
+
+                        {enableSearch && (
+                            <View style={styles.searchContainer}>
+                                <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+                                <TextInput
+                                    style={[styles.searchInput, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}
+                                    placeholder={t('search') || "Search"}
+                                    placeholderTextColor="#999"
+                                    value={searchText}
+                                    onChangeText={setSearchText}
+                                />
+                            </View>
                         )}
-                    />
-                </View>
-            </TouchableOpacity>
-        </Modal>
-    );
+
+                        <FlatList
+                            data={filteredData}
+                            keyExtractor={(item, index) => index.toString()}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity style={[styles.pickerItem, (i18n.language === 'ar' || i18n.language === 'ur') && { alignItems: 'flex-end' }]} onPress={() => { onSelect(item); setSearchText(''); onClose(); }}>
+                                    {renderItem(item)}
+                                </TouchableOpacity>
+                            )}
+                            showsVerticalScrollIndicator={false}
+                        />
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+        );
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -171,52 +286,118 @@ export default function SignUpScreen({ navigation }: Props) {
                         <View style={styles.inputWrapper}>
                             <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('full_name')} *</Text>
                             <TextInput
-                                style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
+                                style={[
+                                    styles.input,
+                                    { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' },
+                                    nameError && { borderColor: '#EF4444', borderWidth: 1.5 }
+                                ]}
                                 placeholder={t('full_name')}
                                 placeholderTextColor="#999"
                                 value={fullName}
-                                onChangeText={setFullName}
+                                onChangeText={(text) => {
+                                    setFullName(text);
+                                    if (nameError) setNameError(false);
+                                }}
                             />
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('national_id')} *</Text>
+                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('national_id_or_passport')} *</Text>
+
+                            {/* Identity Type Toggle */}
+                            <View style={styles.identityToggleContainer}>
+                                <TouchableOpacity
+                                    style={[styles.identityToggleButton, identityType === 'national_id' && styles.identityToggleButtonActive]}
+                                    onPress={() => {
+                                        setIdentityType('national_id');
+                                        setIdError(false);
+                                    }}
+                                >
+                                    <Text style={[styles.identityToggleButtonText, identityType === 'national_id' && styles.identityToggleButtonTextActive]}>
+                                        {t('national_id_label')}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.identityToggleButton, identityType === 'passport' && styles.identityToggleButtonActive]}
+                                    onPress={() => {
+                                        setIdentityType('passport');
+                                        setIdError(false);
+                                    }}
+                                >
+                                    <Text style={[styles.identityToggleButtonText, identityType === 'passport' && styles.identityToggleButtonTextActive]}>
+                                        {t('passport_label')}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
                             <TextInput
-                                style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
-                                placeholder={t('national_id')}
+                                style={[
+                                    styles.input,
+                                    { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' },
+                                    idError && { borderColor: '#EF4444', borderWidth: 1.5 }
+                                ]}
+                                placeholder={identityType === 'national_id' ? t('national_id_label') : t('passport_label')}
                                 placeholderTextColor="#999"
                                 value={nationalId}
-                                onChangeText={setNationalId}
-                                keyboardType="numeric"
+                                onChangeText={(text) => {
+                                    setNationalId(text);
+                                    if (idError) setIdError(false);
+                                }}
+                                keyboardType={identityType === 'national_id' ? "numeric" : "default"}
+                                maxLength={identityType === 'national_id' ? 10 : 20}
                             />
+                            {idError && (
+                                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginLeft: 4, textAlign: (i18n.language === 'ar' || i18n.language === 'ur') ? 'right' : 'left' }}>
+                                    {identityType === 'national_id' ? t('invalid_id') : t('invalid_passport')}
+                                </Text>
+                            )}
                         </View>
 
                         <View style={styles.inputWrapper}>
                             <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('phone_number')} *</Text>
                             <View style={[styles.phoneInputContainer, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
                                 <TouchableOpacity style={[styles.countryCodeButton, (i18n.language === 'ar' || i18n.language === 'ur') && { marginRight: 0, marginLeft: 10, flexDirection: 'row-reverse' }]} onPress={() => setShowCountryPicker(true)}>
-                                    <Text style={styles.countryCodeText}>{selectedCountryCode.flag} {selectedCountryCode.code}</Text>
+                                    <Text style={styles.countryCodeText}>{selectedCountryCode.code}</Text>
                                     <Ionicons name="chevron-down" size={16} color="#666" />
                                 </TouchableOpacity>
                                 <TextInput
-                                    style={[styles.phoneInput, { textAlign: 'left' }]} // Phone numbers usually LTR
+                                    style={[
+                                        styles.phoneInput,
+                                        { textAlign: 'left' },
+                                        phoneError && { borderColor: '#EF4444', borderWidth: 1.5 }
+                                    ]}
                                     placeholder="50 123 4567"
                                     placeholderTextColor="#999"
                                     value={phoneNumber}
-                                    onChangeText={setPhoneNumber}
+                                    onChangeText={(text) => {
+                                        setPhoneNumber(text);
+                                        if (phoneError) setPhoneError(false);
+                                    }}
                                     keyboardType="phone-pad"
                                 />
                             </View>
+                            {phoneError && (
+                                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginLeft: 4, textAlign: (i18n.language === 'ar' || i18n.language === 'ur') ? 'right' : 'left' }}>
+                                    {t('invalid_phone_number')}
+                                </Text>
+                            )}
                         </View>
 
                         <View style={styles.inputWrapper}>
                             <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('password_placeholder')} *</Text>
                             <TextInput
-                                style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
+                                style={[
+                                    styles.input,
+                                    { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' },
+                                    passwordError && { borderColor: '#EF4444', borderWidth: 1.5 }
+                                ]}
                                 placeholder={t('password_placeholder')}
                                 placeholderTextColor="#999"
                                 value={password}
-                                onChangeText={setPassword}
+                                onChangeText={(text) => {
+                                    setPassword(text);
+                                    if (passwordError) setPasswordError(false);
+                                }}
                                 secureTextEntry
                             />
                         </View>
@@ -272,8 +453,14 @@ export default function SignUpScreen({ navigation }: Props) {
 
             {/* Country Code Picker Modal */}
             {renderPickerModal(showCountryPicker, () => setShowCountryPicker(false), COUNTRY_CODES, setSelectedCountryCode, (item) => (
-                <Text style={styles.pickerItemText}>{item.flag}  {item.code}</Text>
-            ))}
+                <View style={{ flexDirection: (i18n.language === 'ar' || i18n.language === 'ur') ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <View style={{ flexDirection: (i18n.language === 'ar' || i18n.language === 'ur') ? 'row-reverse' : 'row', alignItems: 'center' }}>
+                        <Text style={styles.pickerItemText}>{item.flag}</Text>
+                        <Text style={[styles.pickerItemText, { marginHorizontal: 10 }]}>{item.code}</Text>
+                    </View>
+                    <Text style={[styles.pickerItemText, { fontSize: 14, opacity: 0.5 }]}>{item.name}</Text>
+                </View>
+            ), true)}
         </SafeAreaView>
     );
 }
@@ -348,7 +535,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        width: 100,
+        width: 80,
         height: 48,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -470,5 +657,53 @@ const styles = StyleSheet.create({
     pickerItemText: {
         fontSize: 18,
         color: '#333',
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        marginBottom: 16,
+        height: 48,
+    },
+    searchIcon: {
+        marginRight: 8,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        color: '#333',
+        height: '100%',
+    },
+    identityToggleContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 12,
+        padding: 4,
+        marginBottom: 10,
+    },
+    identityToggleButton: {
+        flex: 1,
+        paddingVertical: 8,
+        alignItems: 'center',
+        borderRadius: 8,
+    },
+    identityToggleButtonActive: {
+        backgroundColor: 'white',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    identityToggleButtonText: {
+        fontSize: 14,
+        color: '#666',
+        fontWeight: '500',
+    },
+    identityToggleButtonTextActive: {
+        color: '#007AFF',
+        fontWeight: '700',
     },
 });

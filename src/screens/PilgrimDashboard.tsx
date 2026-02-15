@@ -402,7 +402,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                                 )}
                             >
                                 <Ionicons name="navigate-outline" size={16} color="white" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
-                                <Text style={styles.navigateModButtonText}>{t('navigate_to_moderator') || 'Navigate to Moderator'}</Text>
+                                <Text style={styles.navigateModButtonText}>{t('navigate_to_moderator')}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -603,13 +603,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#10B981',
-        borderRadius: 10,
-        paddingVertical: 10,
-        marginTop: 10,
+        borderRadius: 12,
+        paddingVertical: 12,
+        marginTop: 12,
+        elevation: 2,
+        shadowColor: '#059669',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
     },
     navigateModButtonText: {
         color: 'white',
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
 });
