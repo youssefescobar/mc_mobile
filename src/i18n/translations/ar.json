@@ -275,5 +275,18 @@
     "passport_label": "جواز السفر",
     "national_id_or_passport": "الهوية الوطنية أو جواز السفر",
     "invalid_id": "رقم الهوية غير صحيح",
-    "invalid_passport": "رقم جواز السفر غير صحيح"
+    "invalid_passport": "رقم جواز السفر غير صحيح",
+    "suggested_areas": "المناطق المقترحة",
+    "suggest_area": "اقتراح منطقة",
+    "area_name": "اسم المنطقة",
+    "area_description": "الوصف (اختياري)",
+    "tap_map_to_pin": "انقر على الخريطة لتحديد الموقع",
+    "navigate_to_area": "التوجه",
+    "area_added": "تمت إضافة المنطقة بنجاح",
+    "area_deleted": "تمت إزالة المنطقة",
+    "no_suggested_areas": "لا توجد مناطق مقترحة بعد",
+    "add_area": "إضافة منطقة",
+    "search_location": "ابحث عن موقع...",
+    "are_you_sure": "هل أنت متأكد؟",
+    "delete_area": "إزالة المنطقة"
 }

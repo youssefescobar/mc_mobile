@@ -16,6 +16,7 @@ interface Props {
         longitude: number;
         title?: string;
         description?: string;
+        pinColor?: string;
     }>;
     onLocationUpdate?: (location: Location.LocationObject) => void;
     highlightedMarkerId?: string | null;
@@ -88,7 +89,7 @@ export default function Map({
                         coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
                         title={marker.title}
                         description={marker.description}
-                        pinColor={highlightedMarkerId === marker.id ? '#2563EB' : '#10B981'}
+                        pinColor={marker.pinColor || (highlightedMarkerId === marker.id ? '#2563EB' : '#10B981')}
                     />
                 ))}
             </MapView>

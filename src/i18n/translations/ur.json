@@ -273,5 +273,18 @@
     "passport_label": "پاسپورٹ",
     "national_id_or_passport": "قومی شناختی کارڈ یا پاسپورٹ",
     "invalid_id": "غلط شناختی نمبر",
-    "invalid_passport": "غلط پاسپورٹ نمبر"
+    "invalid_passport": "غلط پاسپورٹ نمبر",
+    "suggested_areas": "تجویز کردہ علاقے",
+    "suggest_area": "علاقہ تجویز کریں",
+    "area_name": "علاقے کا نام",
+    "area_description": "تفصیل (اختیاری)",
+    "tap_map_to_pin": "مقام مقرر کرنے کے لیے نقشے پر ٹیپ کریں",
+    "navigate_to_area": "نقشے پر جائیں",
+    "area_added": "علاقہ کامیابی سے شامل کیا گیا",
+    "area_deleted": "علاقہ ہٹا دیا گیا",
+    "no_suggested_areas": "ابھی تک کوئی تجویز کردہ علاقے نہیں ہیں",
+    "add_area": "علاقہ شامل کریں",
+    "search_location": "مقام تلاش کریں...",
+    "are_you_sure": "کیا آپ کو یقین ہے؟",
+    "delete_area": "علاقہ ہٹائیں"
 }
