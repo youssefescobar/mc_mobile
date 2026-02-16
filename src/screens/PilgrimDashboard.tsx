@@ -37,6 +37,18 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
     const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
     const [sosActive, setSosActive] = useState(false);
+    const [missedCallCount, setMissedCallCount] = useState(0);
+
+    const fetchMissedCallCount = async () => {
+        try {
+            const response = await api.get('/call-history/unread-count');
+            if (response.data) {
+                setMissedCallCount(response.data.count);
+            }
+        } catch (error) {
+            console.error('Failed to fetch missed call count', error);
+        }
+    };
     const [isSharingLocation, setIsSharingLocation] = useState(true);
     const [locationSubscription, setLocationSubscription] = useState<Location.LocationSubscription | null>(null);
     const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -45,6 +57,51 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     const sheetAnim = useRef(new Animated.Value(40)).current;
 
     const { showToast } = useToast();
+
+    const fetchNotifications = async () => {
+        try {
+            const response = await api.get('/notifications/unread-count');
+            if (response.data.success) {
+                setUnreadCount(response.data.unread_count);
+            }
+        } catch (error) {
+            console.error('Failed to fetch notifications', error);
+        }
+    };
+
+    const setupLocationTracking = async () => {
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') return;
+
+            // Get initial battery
+            const level = await Battery.getBatteryLevelAsync();
+            setBatteryLevel(Math.round(level * 100));
+
+            // Start watching position
+            setLocationSubscription(await Location.watchPositionAsync(
+                {
+                    accuracy: Location.Accuracy.High,
+                    timeInterval: 60000,
+                    distanceInterval: 50,
+                },
+                async (location) => {
+                    try {
+                        const battery = await Battery.getBatteryLevelAsync();
+                        await api.put('/pilgrims/location', {
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude,
+                            battery_percent: Math.round(battery * 100)
+                        });
+                    } catch (error) {
+                        console.log('Failed to update location');
+                    }
+                }
+            ));
+        } catch (e) {
+            console.log('Error in location tracking');
+        }
+    };
 
     const { startCall } = useCall();
 
@@ -78,10 +135,10 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
     useEffect(() => {
         const initializeScreen = async () => {
-            await fetchGroupInfo();
-            setupBatteryListener();
-
-            socketService.connect();
+            fetchGroupInfo();
+            fetchNotifications();
+            fetchMissedCallCount();
+            setupLocationTracking();
 
             // Debug: Check what's in AsyncStorage
             const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
@@ -126,10 +183,12 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         }).start();
     }, []);
 
-    // Refresh group info and unread count when screen comes into focus
+    // Refresh data when screen comes into focus
     useFocusEffect(
         React.useCallback(() => {
             fetchGroupInfo();
+            fetchNotifications();
+            fetchMissedCallCount();
         }, [])
     );
 
@@ -325,7 +384,14 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                             style={[styles.profileButton, { marginLeft: 12 }]}
                             onPress={() => navigation.navigate('CallHistory')}
                         >
-                            <Ionicons name="time-outline" size={24} color="#0F172A" />
+                            <Ionicons name="call-outline" size={24} color="#0F172A" />
+                            {missedCallCount > 0 && (
+                                <View style={styles.badge}>
+                                    <Text style={styles.badgeText}>
+                                        {missedCallCount > 9 ? '9+' : missedCallCount}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                     <TouchableOpacity onPress={handleSOS} activeOpacity={0.8}>
@@ -631,9 +697,28 @@ const styles = StyleSheet.create({
     navigateModButtonText: {
         color: 'white',
         fontSize: 14,
-        fontWeight: '700',
-        letterSpacing: 0.3,
+        fontWeight: 'bold',
+        marginLeft: 8,
     },
+    badge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        width: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1.5,
+        borderColor: 'white',
+    },
+    badgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+
     callModButton: {
         flexDirection: 'row',
         alignItems: 'center',

@@ -36,6 +36,18 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
     const { showToast } = useToast();
     const { t, i18n } = useTranslation();
     const isRTL = i18n.language === 'ar' || i18n.language === 'ur';
+    const [missedCallCount, setMissedCallCount] = useState(0);
+
+    const fetchMissedCallCount = async () => {
+        try {
+            const response = await api.get('/call-history/unread-count');
+            if (response.data) {
+                setMissedCallCount(response.data.count);
+            }
+        } catch (error) {
+            console.error('Failed to fetch missed call count', error);
+        }
+    };
 
     const fetchNotifications = useCallback(async () => {
         try {
@@ -132,6 +144,7 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
             fetchGroups();
             fetchProfile();
             fetchNotifications();
+            fetchMissedCallCount();
             setupLocationTracking(); // Start tracking
             // const intervalId = setInterval(fetchNotifications, 15000); // Polling removed
             return () => {
@@ -268,6 +281,13 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                         onPress={() => navigation.navigate('CallHistory')}
                     >
                         <Ionicons name="call-outline" size={24} color="#333" />
+                        {missedCallCount > 0 && (
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>
+                                    {missedCallCount > 9 ? '9+' : missedCallCount}
+                                </Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
 
                     <TouchableOpacity

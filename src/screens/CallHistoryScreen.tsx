@@ -53,15 +53,25 @@ export default function CallHistoryScreen() {
         }
     };
 
+    const markCallsAsRead = async () => {
+        try {
+            await api.put('/call-history/mark-read');
+        } catch (error) {
+            console.error('Failed to mark calls as read', error);
+        }
+    };
+
     useEffect(() => {
         if (userId) {
             fetchCallHistory();
+            markCallsAsRead();
         }
     }, [userId]);
 
     const onRefresh = () => {
         setRefreshing(true);
         fetchCallHistory();
+        markCallsAsRead();
     };
 
     const getCallIcon = (call: CallRecord) => {
