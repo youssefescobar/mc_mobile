@@ -86,12 +86,23 @@ class SocketService {
         }
     }
 
+    onNewMessage(callback: (data: any) => void) {
+        this.socket?.on('new_message', callback);
+    }
+
+    offNewMessage(callback?: (data: any) => void) {
+        if (callback) {
+            this.socket?.off('new_message', callback);
+        } else {
+            this.socket?.off('new_message');
+        }
+    }
+
     private emit(event: string, data: any) {
-        if (this.socket?.connected) {
+        if (this.socket) {
             this.socket.emit(event, data);
         } else {
-            console.log('[SocketService] Queueing emit (not connected):', event);
-            // Could implement queuing logic here if needed
+            console.log('[SocketService] Socket not initialized, cannot emit:', event);
         }
     }
 }

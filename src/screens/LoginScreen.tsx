@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, KeyboardAvoidingView, Platform, Dimensions, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { api, setAuthToken } from '../services/api';
+import { api, setAuthToken, updateFCMToken } from '../services/api';
+import { registerForPushNotificationsAsync } from '../services/NotificationService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useToast } from '../components/ToastContext';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +34,13 @@ export default function LoginScreen({ navigation }: Props) {
 
             console.log('Login successful:', role);
             setAuthToken(token);
+
+            // Update FCM Token after login
+            registerForPushNotificationsAsync().then(fcmToken => {
+                if (fcmToken) {
+                    updateFCMToken(fcmToken);
+                }
+            });
 
             // Navigate based on role
             if (role === 'moderator') {

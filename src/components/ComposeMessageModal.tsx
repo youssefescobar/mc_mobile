@@ -32,12 +32,14 @@ export default function ComposeMessageModal({
     const [mode, setMode] = useState<'text' | 'voice' | 'tts'>('text');
     const [isUrgent, setIsUrgent] = useState(false);
 
+
     // Audio recording state
     const [recording, setRecording] = useState<Audio.Recording | null>(null);
     const [recordingStatus, setRecordingStatus] = useState<'idle' | 'recording' | 'recorded'>('idle');
     const [audioUri, setAudioUri] = useState<string | null>(null);
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [durationMillis, setDurationMillis] = useState(0);
 
     useEffect(() => {
         return () => {
@@ -72,11 +74,17 @@ export default function ComposeMessageModal({
     const stopRecording = async () => {
         if (!recording) return;
         setRecordingStatus('idle');
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
-        setAudioUri(uri);
-        setRecording(null);
-        setRecordingStatus('recorded');
+        try {
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            const status = await recording.getStatusAsync();
+            setAudioUri(uri);
+            setDurationMillis(status.durationMillis);
+            setRecording(null);
+            setRecordingStatus('recorded');
+        } catch (error) {
+            console.error('Failed to stop recording', error);
+        }
     };
 
     const playRecording = async () => {
@@ -149,6 +157,7 @@ export default function ComposeMessageModal({
             } else if (mode === 'tts') {
                 formData.append('content', message);
                 formData.append('original_text', message);
+
             } else if (mode === 'voice' && audioUri) {
                 const filename = audioUri.split('/').pop() || 'voice.m4a';
                 const match = /\.(\w+)$/.exec(filename);
@@ -160,11 +169,43 @@ export default function ComposeMessageModal({
                     name: filename,
                     type,
                 });
+                // Send duration in seconds
+                formData.append('duration', Math.round(durationMillis / 1000).toString());
             }
 
-            await api.post(submitPath, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
+            if (mode === 'voice') {
+                console.log('Voice file info:', {
+                    uri: audioUri,
+                    type: 'audio/m4a', // simplified
+                    name: 'voice.m4a'
+                });
+
+                // Use fetch for voice uploads
+                // Note: React Native fetch handles Content-Type header for FormData automatically IF left undefined or set correctly
+                const response = await fetch(`${api.defaults.baseURL}${submitPath}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': api.defaults.headers.common['Authorization'] as string,
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error('Voice upload failed with status:', response.status, text);
+                    throw new Error(`Upload failed: ${response.status} ${text}`);
+                }
+                await response.json();
+            } else {
+                // Use axios for text/tts
+                await api.post(submitPath, formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                    transformRequest: (data) => data,
+                });
+            }
 
             onSuccess();
             resetForm();
@@ -182,6 +223,8 @@ export default function ComposeMessageModal({
         setRecordingStatus('idle');
         setMode('text');
         setIsUrgent(false);
+        setDurationMillis(0);
+
     };
 
     return (
@@ -189,7 +232,8 @@ export default function ComposeMessageModal({
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.container}>
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                        keyboardVerticalOffset={0}
                         style={styles.keyboardView}
                     >
                         <TouchableWithoutFeedback>
@@ -346,6 +390,8 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
         padding: 20,
         paddingBottom: Platform.OS === 'ios' ? 34 : 20,
         minHeight: 400,

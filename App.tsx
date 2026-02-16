@@ -7,6 +7,8 @@ import './src/services/BackgroundNotificationTask'; // Register background task
 
 export default function App() {
   useEffect(() => {
+    // Just register for push notifications to get the token. 
+    // The actual backend update should happen after login/splash when we have the auth token.
     registerForPushNotificationsAsync();
 
     const cleanup = setupNotificationListeners(

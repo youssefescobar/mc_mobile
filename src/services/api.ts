@@ -29,3 +29,22 @@ export const setAuthToken = (token: string | null) => {
 };
 
 export const clearAuthToken = () => setAuthToken(null);
+
+export const logout = async () => {
+    try {
+        await api.post('/auth/logout');
+    } catch (error) {
+        console.error('Logout failed on server', error);
+    } finally {
+        clearAuthToken();
+    }
+};
+
+export const updateFCMToken = async (token: string) => {
+    try {
+        await api.put('/auth/fcm-token', { fcm_token: token });
+        console.log('FCM Token updated successfully');
+    } catch (error) {
+        console.error('Failed to update FCM token', error);
+    }
+};

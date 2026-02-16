@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndi
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
-import { api, setAuthToken, BASE_URL } from '../services/api';
+import { api, setAuthToken, BASE_URL, logout } from '../services/api';
 import { Group, Pilgrim } from '../types';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -141,8 +141,25 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
     );
 
     const handleLogout = async () => {
-        setAuthToken(null);
-        navigation.replace('Login');
+        Alert.alert(
+            t('log_out'),
+            t('logout_confirmation'),
+            [
+                { text: t('cancel'), style: 'cancel' },
+                {
+
+                    text: t('log_out'),
+                    style: 'destructive',
+                    onPress: async () => {
+                        await logout();
+                        navigation.reset({
+                            index: 0,
+                            routes: [{ name: 'Login' }],
+                        });
+                    }
+                }
+            ]
+        );
     };
 
     const handleDeleteGroup = async (groupId: string, groupName: string) => {

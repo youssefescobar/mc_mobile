@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { api, clearAuthToken } from '../services/api';
+import { api, clearAuthToken, logout } from '../services/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useToast } from '../components/ToastContext';
 import { useTranslation } from 'react-i18next';
@@ -209,10 +209,11 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
             [
                 { text: t('cancel'), style: 'cancel' },
                 {
+
                     text: t('logout'),
                     style: 'destructive',
                     onPress: async () => {
-                        await clearAuthToken();
+                        await logout();
                         navigation.reset({
                             index: 0,
                             routes: [{ name: 'Login' }],

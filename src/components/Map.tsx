@@ -1,7 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-const Map = () => {
+interface MapProps {
+    onLocationUpdate?: (location: any) => void;
+    markers?: any[];
+}
+
+const Map = ({ onLocationUpdate, markers }: MapProps) => {
     return (
         <View style={styles.container}>
             <Text style={styles.text}>Map is disabled for testing.</Text>

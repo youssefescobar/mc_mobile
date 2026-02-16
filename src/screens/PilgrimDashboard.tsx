@@ -144,9 +144,21 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         if (!groupInfo) return;
         socketService.joinGroup(groupInfo.group_id);
         fetchUnreadCount(groupInfo.group_id);
-        // const interval = setInterval(() => fetchUnreadCount(groupInfo.group_id), 15000);
+
+        const handleNewMessage = (msg: any) => {
+            if (msg.group_id === groupInfo.group_id) {
+                // Determine if message is for us (broadcast or direct)
+                const isForMe = !msg.recipient_id || msg.recipient_id === route.params.userId;
+                if (isForMe && msg.sender_id._id !== route.params.userId) {
+                    setUnreadCount(prev => prev + 1);
+                }
+            }
+        };
+
+        socketService.onNewMessage(handleNewMessage);
+
         return () => {
-            // clearInterval(interval);
+            socketService.offNewMessage(handleNewMessage);
             socketService.leaveGroup(groupInfo.group_id);
         };
     }, [groupInfo]);
@@ -381,7 +393,8 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                             style={[styles.messageButton, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
                             onPress={() => navigation.navigate('PilgrimMessagesScreen', {
                                 groupId: groupInfo.group_id,
-                                groupName: groupInfo.group_name
+                                groupName: groupInfo.group_name,
+                                userId: route.params.userId
                             })}
                         >
                             <Ionicons name="chatbubbles-outline" size={16} color="#2563EB" style={{ marginRight: 8, marginLeft: isRTL ? 8 : 0 }} />
@@ -475,7 +488,7 @@ const styles = StyleSheet.create({
         right: 0,
         paddingHorizontal: 16,
         paddingTop: 20,
-        paddingBottom: 34,
+        paddingBottom: 50, // Moved up from 34
         backgroundColor: 'white',
         borderTopLeftRadius: 28,
         borderTopRightRadius: 28,
@@ -572,7 +585,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 6,
-        marginLeft: 8,
+        marginLeft: 12,
     },
     unreadBadgeText: {
         color: 'white',

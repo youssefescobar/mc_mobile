@@ -10,7 +10,7 @@ export type RootStackParamList = {
     Notifications: undefined;
     EditProfile: undefined;
     PilgrimSignUp: undefined;
-    PilgrimMessagesScreen: { groupId: string; groupName: string };
+    PilgrimMessagesScreen: { groupId: string; groupName: string; userId?: string };
     ModeratorMessagesScreen: { groupId: string; groupName: string };
     JoinGroup: { userId: string };
     CommunicationScreen: { groupId: string };

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api, BASE_URL } from '../services/api';
+import { socketService } from '../services/socket';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
@@ -105,7 +106,22 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
         fetchMessages();
         // Mark all messages in this group as read
         api.post(`/messages/group/${groupId}/mark-read`).catch(() => { });
+
+        // Socket Connection
+        socketService.connect();
+        socketService.joinGroup(groupId);
+
+        const handleNewMessage = (message: any) => {
+            console.log('New message received via socket:', message);
+            setMessages(prev => [message, ...prev]);
+            // Mark as read if screen is focused (optional, for now just strict append)
+        };
+
+        socketService.onNewMessage(handleNewMessage);
+
         return () => {
+            socketService.offNewMessage(handleNewMessage);
+            socketService.leaveGroup(groupId);
             cleanupAudio();
         };
     }, []);
@@ -214,74 +230,87 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
             });
         };
 
+        const isMe = item.sender_id?._id === route.params?.userId; // Assuming userId is passed or retrieved globally
+        // Fallback if userId not available immediately, relying on sender_model
+        const isMyMessage = item.sender_model === 'Pilgrim' && !isModeratorSender;
+
         return (
             <View style={[
-                styles.messageCard,
-                isModeratorSender ? styles.messageCardModerator : styles.messageCardPilgrim,
-                item.is_urgent && styles.urgentMessage,
-                isRTL && { direction: 'rtl' }
+                styles.messageRow,
+                isModeratorSender ? styles.rowLeft : styles.rowRight,
+                isRTL && { flexDirection: isModeratorSender ? 'row-reverse' : 'row' }
             ]}>
-                <View style={[styles.cardHeader, isRTL && { flexDirection: 'row-reverse' }]}>
-                    <View style={[styles.senderBlock, isRTL && { flexDirection: 'row-reverse' }]}>
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarText}>
-                                {senderName.charAt(0).toUpperCase()}
-                            </Text>
-                        </View>
-                        <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+                {/* Avatar only for Moderator (Left side) */}
+                {isModeratorSender && (
+                    <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>
+                            {senderName.charAt(0).toUpperCase()}
+                        </Text>
+                    </View>
+                )}
+
+                <View style={[
+                    styles.messageBubble,
+                    isModeratorSender ? styles.bubbleModerator : styles.bubblePilgrim,
+                    item.is_urgent && styles.urgentBubble
+                ]}>
+                    <View style={styles.bubbleHeader}>
+                        {isModeratorSender && (
                             <Text style={styles.senderName}>{senderName}</Text>
-                            <View style={[styles.metaRow, isRTL && { flexDirection: 'row-reverse' }]}>
-                                <Text style={[
-                                    styles.senderRole,
-                                    isModeratorSender ? styles.roleModerator : styles.rolePilgrim
-                                ]}>
-                                    {isModeratorSender ? (item.sender_id?.role === 'moderator' ? t('moderator') : (item.sender_id?.role || t('moderator'))) : t('pilgrim')}
-                                </Text>
-                                <Text style={styles.time}>
-                                    {new Date(item.created_at).toLocaleString()}
-                                </Text>
-                                {item.is_urgent && (
-                                    <View style={[styles.urgentBadge, isRTL && { flexDirection: 'row-reverse' }]}>
-                                        <Ionicons name="alert" size={10} color="white" />
-                                        <Text style={styles.urgentText}>{t('urgent_caps')}</Text>
-                                    </View>
-                                )}
+                        )}
+                        {item.is_urgent && (
+                            <View style={styles.urgentBadge}>
+                                <Ionicons name="alert" size={10} color="#DC2626" />
+                                <Text style={styles.urgentText}>{t('urgent_caps') || 'URGENT'}</Text>
                             </View>
-                        </View>
+                        )}
                     </View>
+
+                    {item.type === 'text' && (
+                        <Text style={[
+                            styles.content,
+                            isModeratorSender ? styles.textModerator : styles.textPilgrim
+                        ]}>{item.content}</Text>
+                    )}
+
+                    {isTts && (
+                        <View style={styles.ttsContainer}>
+                            <View style={styles.ttsHeader}>
+                                <Ionicons name="volume-high" size={16} color={isModeratorSender ? "#475569" : "#E0E7FF"} />
+                                <Text style={[styles.ttsLabel, isModeratorSender ? { color: '#475569' } : { color: '#E0E7FF' }]}>
+                                    {t('tts_message') || 'Announcement'}
+                                </Text>
+                            </View>
+                            <Text style={[styles.ttsText, isModeratorSender ? styles.textModerator : styles.textPilgrim]}>
+                                {item.original_text}
+                            </Text>
+                            <TouchableOpacity
+                                style={[styles.playButton, isModeratorSender ? { backgroundColor: '#E2E8F0' } : { backgroundColor: 'rgba(255,255,255,0.2)' }]}
+                                onPress={() => playTts(item.original_text!, item._id)}
+                            >
+                                <Ionicons name={(isPlaying && isSpeaking) ? "pause" : "play"} size={16} color={isModeratorSender ? "#0F172A" : "#FFFFFF"} />
+                                <Text style={[styles.playText, isModeratorSender ? { color: '#0F172A' } : { color: '#FFFFFF' }]}>
+                                    {(isPlaying && isSpeaking) ? (t('playing') || 'Playing') : 'Play Announcement'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {isVoice && (
+                        <VoiceMessage
+                            item={item}
+                            isPlaying={isPlaying}
+                            onPlay={() => playVoice(item.media_url!, item._id)}
+                            playbackStatus={playbackStatus}
+                            isRTL={isRTL}
+                            isModerator={isModeratorSender}
+                        />
+                    )}
+
+                    <Text style={[styles.time, isModeratorSender ? { color: '#64748B' } : { color: '#E0E7FF', alignSelf: 'flex-end' }]}>
+                        {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
                 </View>
-
-                {item.type === 'text' && (
-                    <Text style={[styles.content, isRTL && { textAlign: 'right' }]}>{item.content}</Text>
-                )}
-
-                {isTts && (
-                    <View>
-                        <View style={[styles.ttsHeader, isRTL && { flexDirection: 'row-reverse', alignSelf: 'flex-end' }]}>
-                            <Ionicons name="volume-high" size={20} color="#2563EB" />
-                            <Text style={[styles.ttsLabel, isRTL && { marginLeft: 0, marginRight: 5 }]}>{t('tts_message')}</Text>
-                        </View>
-                        <Text style={[styles.ttsText, isRTL && { textAlign: 'right' }]}>{item.original_text}</Text>
-                        <TouchableOpacity
-                            style={[styles.playButton, (isPlaying && isSpeaking) && styles.playingButton, isRTL && { flexDirection: 'row-reverse', alignSelf: 'flex-end' }]}
-                            onPress={() => playTts(item.original_text!, item._id)}
-                        >
-                            <Ionicons name={(isPlaying && isSpeaking) ? "pause" : "play"} size={20} color="white" />
-                            <Text style={styles.playText}>{(isPlaying && isSpeaking) ? t('playing') : t('play')}</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-
-                {isVoice && (
-                    <VoiceMessage
-                        item={item}
-                        isPlaying={isPlaying}
-                        onPlay={() => playVoice(item.media_url!, item._id)}
-                        playbackStatus={playbackStatus}
-                        isRTL={isRTL}
-                        isModerator={isModeratorSender}
-                    />
-                )}
             </View>
         );
     };
@@ -290,11 +319,11 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
         <SafeAreaView style={styles.container}>
             <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, isRTL && { marginRight: 0, marginLeft: 16 }]}>
-                    <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={22} color="#0F172A" />
+                    <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={24} color="#0F172A" />
                 </TouchableOpacity>
-                <View style={isRTL && { alignItems: 'flex-end' }}>
+                <View style={[styles.headerContent, isRTL && { alignItems: 'flex-end' }]}>
                     <Text style={styles.title}>{groupName}</Text>
-                    <Text style={styles.subtitle}>{t('broadcasts_updates')}</Text>
+                    <Text style={styles.subtitle}>{t('broadcasts_updates') || 'Group Updates'}</Text>
                 </View>
             </View>
 
@@ -306,7 +335,13 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
                     renderItem={renderItem}
                     keyExtractor={item => item._id}
                     contentContainerStyle={styles.list}
-                    ListEmptyComponent={<Text style={styles.empty}>{t('no_messages_yet')}</Text>}
+                    inverted  // Newest at bottom
+                    ListEmptyComponent={
+                        <View style={[styles.emptyContainer, { transform: [{ scaleY: -1 }] }]}>
+                            <Ionicons name="chatbubbles-outline" size={48} color="#CBD5E1" />
+                            <Text style={styles.empty}>{t('no_messages_yet') || 'No messages yet'}</Text>
+                        </View>
+                    }
                 />
             )}
         </SafeAreaView>
@@ -316,214 +351,215 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F6F7FB',
+        backgroundColor: '#F8FAFC', // Slate 50
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: '#F6F7FB',
+        paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        zIndex: 10,
     },
     backBtn: {
         marginRight: 16,
         padding: 4,
     },
+    headerContent: {
+        flex: 1,
+    },
     title: {
-        fontSize: 18,
-        fontWeight: '800',
+        fontSize: 17,
+        fontWeight: '700',
         color: '#0F172A',
+        letterSpacing: -0.3,
     },
     subtitle: {
         fontSize: 12,
         color: '#64748B',
-        marginTop: 2,
+        marginTop: 1,
     },
     list: {
         paddingHorizontal: 16,
         paddingBottom: 32,
+        paddingTop: 16,
     },
     loader: {
         marginTop: 50,
     },
+    emptyContainer: {
+        alignItems: 'center',
+        marginTop: 80,
+    },
     empty: {
         textAlign: 'center',
-        marginTop: 50,
+        marginTop: 12,
         color: '#94A3B8',
         fontSize: 15,
+        fontWeight: '500',
     },
-    messageCard: {
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 2,
-    },
-    messageCardModerator: {
-        backgroundColor: '#FFFFFF',
-    },
-    messageCardPilgrim: {
-        backgroundColor: '#F8FAFC',
-    },
-    cardHeader: {
+    // Message Row
+    messageRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 10,
+        marginBottom: 16,
+        alignItems: 'flex-end',
+        gap: 8,
     },
-    senderBlock: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        gap: 10,
+    rowLeft: {
+        justifyContent: 'flex-start',
+    },
+    rowRight: {
+        justifyContent: 'flex-end',
     },
     avatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         backgroundColor: '#E2E8F0',
         justifyContent: 'center',
         alignItems: 'center',
     },
     avatarText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#0F172A',
-    },
-    senderName: {
-        fontWeight: '700',
-        fontSize: 15,
-        color: '#0F172A',
-    },
-    metaRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginTop: 4,
-    },
-    senderRole: {
-        fontSize: 10,
-        color: 'white',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 10,
-        overflow: 'hidden',
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    roleModerator: {
-        backgroundColor: '#3B82F6',
-    },
-    rolePilgrim: {
-        backgroundColor: '#64748B',
-    },
-    content: {
-        fontSize: 15,
-        color: '#334155',
-        lineHeight: 22,
-        marginTop: 6,
-    },
-    time: {
-        fontSize: 11,
-        color: '#94A3B8',
-    },
-    urgentMessage: {
-        backgroundColor: '#FEF2F2',
-        borderWidth: 1,
-        borderColor: '#FECACA',
-    },
-    urgentBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#EF4444',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 10,
-    },
-    urgentText: {
-        color: 'white',
-        fontSize: 9,
-        fontWeight: '700',
-        marginLeft: 3,
-        letterSpacing: 0.5,
-    },
-    ttsHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-        backgroundColor: '#DBEAFE',
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: 8,
-        alignSelf: 'flex-start',
-    },
-    ttsLabel: {
-        fontSize: 12,
-        color: '#1E40AF',
-        fontWeight: '600',
-        marginLeft: 5,
-    },
-    ttsText: {
-        fontSize: 15,
-        color: '#1E293B',
-        marginBottom: 10,
-        lineHeight: 21,
-    },
-    playButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#3B82F6',
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderRadius: 10,
-        alignSelf: 'flex-start',
-        gap: 8,
-    },
-    playingButton: {
-        backgroundColor: '#EF4444',
-    },
-    playText: {
-        color: 'white',
-        fontWeight: '600',
         fontSize: 14,
+        fontWeight: '700',
+        color: '#475569',
     },
-    // Voice styles
-    voiceContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderRadius: 12,
+    // Bubbles
+    messageBubble: {
+        maxWidth: '80%',
         padding: 12,
-        marginVertical: 4,
-        gap: 12,
-    },
-    voiceModerator: {
-        backgroundColor: '#F1F5F9',
-    },
-    voicePilgrim: {
-        backgroundColor: '#EFF6FF',
-    },
-    voicePlayBtn: {
-        width: 36,
-        height: 36,
         borderRadius: 18,
-        backgroundColor: 'white',
-        justifyContent: 'center',
-        alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
         elevation: 1,
     },
+    bubbleModerator: {
+        backgroundColor: '#FFFFFF',
+        borderBottomLeftRadius: 4,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    bubblePilgrim: {
+        backgroundColor: '#2563EB', // Blue 600
+        borderBottomRightRadius: 4,
+    },
+    urgentBubble: {
+        backgroundColor: '#FEF2F2', // Red 50
+        borderColor: '#FECACA',
+        borderWidth: 1,
+    },
+    bubbleHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+        gap: 8,
+    },
+    senderName: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#64748B', // Slate 500
+        marginBottom: 2,
+    },
+    urgentBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FEE2E2',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+        gap: 4,
+    },
+    urgentText: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#DC2626',
+        letterSpacing: 0.5,
+    },
+    // Content
+    content: {
+        fontSize: 15,
+        lineHeight: 22,
+    },
+    textModerator: {
+        color: '#1E293B', // Slate 800
+    },
+    textPilgrim: {
+        color: '#FFFFFF',
+    },
+    time: {
+        fontSize: 10,
+        marginTop: 6,
+    },
+    // TTS Specific
+    ttsContainer: {
+        marginTop: 4,
+    },
+    ttsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6,
+        gap: 6,
+    },
+    ttsLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    ttsText: {
+        fontSize: 16,
+        fontWeight: '500',
+        lineHeight: 24,
+        marginBottom: 10,
+        fontStyle: 'italic',
+    },
+    playButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        gap: 8,
+    },
+    playText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    // Voice Message
+    voiceContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 4,
+        overflow: 'hidden', // Prevent overflow
+    },
+    voiceModerator: {},
+    voicePilgrim: {},
+    voicePlayBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 1,
+        flexShrink: 0, // Prevent button from shrinking
+    },
     voiceContent: {
         flex: 1,
         justifyContent: 'center',
+        marginRight: 8, // Add spacing
+        overflow: 'hidden', // Contain waveform
     },
     waveformContainer: {
         flexDirection: 'row',
@@ -531,14 +567,18 @@ const styles = StyleSheet.create({
         height: 24,
         gap: 2,
         marginBottom: 4,
+        flexWrap: 'nowrap', // Force single line
+        overflow: 'hidden', // Hide extra bars
+        maxWidth: '100%', // Ensure it fits
     },
     waveBar: {
         width: 3,
         borderRadius: 2,
+        minWidth: 3, // Enforce width
     },
     voiceTime: {
         fontSize: 10,
-        color: '#64748B',
-        fontWeight: '600',
+        color: '#94A3B8', // Slate 400
+        fontWeight: '500',
     },
 });
