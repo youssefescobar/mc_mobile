@@ -5,6 +5,7 @@ import { RootStackParamList } from '../navigation/types';
 import { api, setAuthToken, updateFCMToken } from '../services/api';
 import { registerForPushNotificationsAsync } from '../services/NotificationService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from '../components/ToastContext';
 import { useTranslation } from 'react-i18next';
 
@@ -30,9 +31,18 @@ export default function LoginScreen({ navigation }: Props) {
             console.log('Attempting login with:', identifier);
             const response = await api.post('/auth/login', { identifier, password });
 
-            const { token, role, user_id } = response.data;
+            const { token, role, user_id, full_name } = response.data;
 
             console.log('Login successful:', role);
+
+            // Store auth data in AsyncStorage
+            await AsyncStorage.setItem('token', token);
+            await AsyncStorage.setItem('role', role);
+            await AsyncStorage.setItem('user_id', user_id);
+            if (full_name) {
+                await AsyncStorage.setItem('full_name', full_name);
+            }
+
             setAuthToken(token);
 
             // Update FCM Token after login

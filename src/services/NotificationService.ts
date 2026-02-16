@@ -32,6 +32,18 @@ export async function registerForPushNotificationsAsync() {
             lightColor: '#FF0000',
             sound: 'urgent.wav', // We need to add this sound file
         });
+
+        await Notifications.setNotificationChannelAsync('incoming_call', {
+            name: 'Incoming Calls',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 1000, 1000, 1000, 1000, 1000], // Continuous vibration pattern
+            lightColor: '#00FF00',
+            sound: 'default', // Use default ringtone
+            enableVibrate: true,
+            showBadge: true,
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+            bypassDnd: true, // Bypass Do Not Disturb
+        });
     }
 
     if (Device.isDevice) {

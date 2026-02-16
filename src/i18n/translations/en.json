@@ -275,5 +275,6 @@
     "passport_label": "Passport",
     "national_id_or_passport": "National ID or Passport",
     "invalid_id": "Invalid National ID",
-    "invalid_passport": "Invalid Passport Number"
+    "invalid_passport": "Invalid Passport Number",
+    "call_moderator": "Call Moderator"
 }

@@ -14,19 +14,19 @@ import GroupCodeModal from '../components/GroupCodeModal';
 import Map from '../components/Map';
 import ComposeMessageModal from '../components/ComposeMessageModal';
 import { Ionicons } from '@expo/vector-icons';
-import CallModal from '../components/CallModal';
+// import CallModal from '../components/CallModal'; // Removed local import
 import { useTranslation } from 'react-i18next';
 import { socketService } from '../services/socket';
 import { useIsRTL } from '../hooks/useIsRTL';
 import { openNavigation } from '../utils/openNavigation';
+import { useCall } from '../context/CallContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupDetails'>;
 
 export default function GroupDetailsScreen({ route, navigation }: Props) {
-    // Call state
-    const [callModalVisible, setCallModalVisible] = useState(false);
-    const [callTarget, setCallTarget] = useState<{ id: string; name: string } | null>(null);
-    const [isCaller, setIsCaller] = useState(false);
+    // Call state handled by provider
+    const { startCall } = useCall();
+
     const { groupId, groupName, focusPilgrimId, openProfile } = route.params;
     const { t, i18n } = useTranslation();
     const isRTL = useIsRTL();
@@ -129,7 +129,9 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
 
         return () => {
             // clearInterval(interval);
-            socketService.leaveGroup(groupId);
+            if (groupId) {
+                socketService.leaveGroup(groupId);
+            }
             socketService.offLocationUpdate(handleLocationUpdate);
             socketService.offSOSAlert(handleSOS);
         };
@@ -426,16 +428,9 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                     />
                 )}
 
-                {callTarget && (
-                    <CallModal
-                        visible={callModalVisible}
-                        onClose={() => { setCallModalVisible(false); setCallTarget(null); }}
-                        isCaller={isCaller}
-                        remoteUser={callTarget}
-                        socket={socketService.getSocket()}
-                    />
-                )}
             </View>
+
+            {/* Removed Local Call Modal */}
 
             <TouchableOpacity style={styles.fab} onPress={() => setShowActionMenu(true)}>
                 <Ionicons name="add" size={30} color="white" />
@@ -475,9 +470,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 onSuccess={() => showToast(t('alert_sent_success'), 'success')}
                 onCall={directRecipientId ? () => {
                     setShowDirectModal(false);
-                    setCallTarget({ id: directRecipientId, name: directRecipientName });
-                    setIsCaller(true);
-                    setCallModalVisible(true);
+                    startCall(directRecipientId, directRecipientName);
                 } : undefined}
             />
 
@@ -512,7 +505,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                 {profilePilgrim?.phone_number && (
                                     <TouchableOpacity
                                         style={[styles.actionButton, styles.callBuildAction]}
-                                        onPress={() => Linking.openURL(`tel:${profilePilgrim.phone_number}`)}
+                                        onPress={() => startCall(profilePilgrim._id, profilePilgrim.full_name)}
                                     >
                                         <Ionicons name="call" size={20} color="white" />
                                         <Text style={styles.actionButtonText}>{t('call_pilgrim')}</Text>

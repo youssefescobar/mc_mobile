@@ -1,61 +1,73 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// Lazy-load react-native-webrtc to prevent Expo Go crashes
-// These will be null in Expo Go, and the component shows a fallback message
-let RTCView: any = null;
-let mediaDevices: any = null;
-let RTCPeerConnection: any = null;
-let RTCSessionDescription: any = null;
-let RTCIceCandidate: any = null;
-let webrtcAvailable = false;
-
-try {
-  const webrtc = require('react-native-webrtc');
-  RTCView = webrtc.RTCView;
-  mediaDevices = webrtc.mediaDevices;
-  RTCPeerConnection = webrtc.RTCPeerConnection;
-  RTCSessionDescription = webrtc.RTCSessionDescription;
-  RTCIceCandidate = webrtc.RTCIceCandidate;
-  webrtcAvailable = true;
-} catch (e) {
-  console.log('[CallModal] react-native-webrtc not available (Expo Go). Calls require a development build.');
-}
-
+// Props updated to be presentational
 interface CallModalProps {
   visible: boolean;
   onClose: () => void;
   isCaller: boolean;
-  remoteUser: { id: string; name: string };
-  socket: any;
+  remoteUser: { id: string; name: string; role?: string };
+
+  // State from Context
+  active: boolean;
+  incoming: boolean;
+  webrtcAvailable: boolean;
+  isSpeakerOn?: boolean;
+  callStatus?: 'calling' | 'ringing' | 'connected' | 'declined' | 'unreachable' | 'ended' | null;
+
+  // Actions
+  onAnswer: () => void;
+  onHangup: () => void;
+  onDecline?: () => void;
+  toggleMute?: () => boolean;
+  toggleSpeaker?: () => void;
+
+  // Streams
+  localStream?: any;
+  remoteStream?: any;
+
+  // Legacy prop for compatibility
+  startCall?: () => void;
 }
 
-const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-const CallModal: React.FC<CallModalProps> = ({ visible, onClose, isCaller, remoteUser, socket }) => {
-  const [localStream, setLocalStream] = useState<any>(null);
-  const [remoteStream, setRemoteStream] = useState<any>(null);
-  const [callActive, setCallActive] = useState(false);
+const CallModal: React.FC<CallModalProps> = ({
+  visible,
+  onClose,
+  isCaller,
+  remoteUser,
+  active,
+  incoming,
+  webrtcAvailable,
+  isSpeakerOn = false,
+  callStatus = null,
+  onAnswer,
+  onHangup,
+  onDecline,
+  toggleMute,
+  toggleSpeaker,
+  localStream,
+  remoteStream,
+}) => {
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const pc = useRef<any>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Call duration timer
+  // Timer logic
   useEffect(() => {
-    if (callActive) {
+    if (active) {
       setCallDuration(0);
       timerRef.current = setInterval(() => {
         setCallDuration(prev => prev + 1);
       }, 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
+      setCallDuration(0);
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [callActive]);
+  }, [active]);
 
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -63,126 +75,16 @@ const CallModal: React.FC<CallModalProps> = ({ visible, onClose, isCaller, remot
     return `${m}:${s}`;
   };
 
-  useEffect(() => {
-    if (!visible) return;
-    if (!webrtcAvailable) return;
-    startCall();
-    return () => cleanup();
-    // eslint-disable-next-line
-  }, [visible]);
-
-  const startCall = async () => {
-    if (!webrtcAvailable || !RTCPeerConnection || !mediaDevices) return;
-
-    try {
-      pc.current = new RTCPeerConnection(configuration);
-      const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-      setLocalStream(stream);
-      stream.getTracks().forEach((track: any) => pc.current?.addTrack(track, stream));
-
-      // Use legacy event handlers for react-native-webrtc compatibility
-      if ('onaddstream' in pc.current) {
-        pc.current.onaddstream = (event: any) => {
-          setRemoteStream(event.stream);
-        };
-      } else if ('ontrack' in pc.current) {
-        pc.current.ontrack = (event: any) => {
-          if (event.streams && event.streams[0]) {
-            setRemoteStream(event.streams[0]);
-          }
-        };
-      }
-
-      pc.current.onicecandidate = (event: any) => {
-        if (event.candidate) {
-          socket.emit('ice-candidate', { to: remoteUser.id, candidate: event.candidate });
-        }
-      };
-
-      if (isCaller) {
-        const offer = await pc.current.createOffer();
-        await pc.current.setLocalDescription(offer);
-        socket.emit('call-offer', { to: remoteUser.id, offer });
-      }
-    } catch (error) {
-      console.error('[CallModal] Error starting call:', error);
+  const handleToggleMute = () => {
+    if (toggleMute) {
+      const newMuted = toggleMute();
+      setIsMuted(newMuted);
     }
   };
 
-  const cleanup = () => {
-    pc.current?.close();
-    pc.current = null;
-    localStream?.getTracks?.().forEach?.((track: any) => track.stop?.());
-    setLocalStream(null);
-    setRemoteStream(null);
-    setCallActive(false);
-    setCallDuration(0);
-    setIsMuted(false);
-  };
+  if (!visible) return null;
 
-  const toggleMute = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks?.()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsMuted(!audioTrack.enabled);
-      }
-    }
-  };
-
-  const handleEndCall = () => {
-    socket?.emit('call-end', { to: remoteUser.id });
-    cleanup();
-    onClose();
-  };
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleAnswer = async ({ answer }: any) => {
-      if (pc.current && RTCSessionDescription) {
-        await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
-        setCallActive(true);
-      }
-    };
-
-    const handleOffer = async ({ offer, from }: any) => {
-      if (pc.current && RTCSessionDescription) {
-        await pc.current.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.current.createAnswer();
-        await pc.current.setLocalDescription(answer);
-        socket.emit('call-answer', { to: from, answer });
-        setCallActive(true);
-      }
-    };
-
-    const handleIceCandidate = async ({ candidate }: any) => {
-      if (pc.current && candidate && RTCIceCandidate) {
-        try {
-          await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (e) { }
-      }
-    };
-
-    const handleCallEnd = () => {
-      cleanup();
-      onClose();
-    };
-
-    socket.on('call-answer', handleAnswer);
-    socket.on('call-offer', handleOffer);
-    socket.on('ice-candidate', handleIceCandidate);
-    socket.on('call-end', handleCallEnd);
-
-    return () => {
-      socket.off('call-answer', handleAnswer);
-      socket.off('call-offer', handleOffer);
-      socket.off('ice-candidate', handleIceCandidate);
-      socket.off('call-end', handleCallEnd);
-    };
-  }, [socket]);
-
-  // Fallback UI when WebRTC is not available (Expo Go)
+  // Fallback if WebRTC not available
   if (!webrtcAvailable) {
     return (
       <Modal visible={visible} transparent animationType="slide">
@@ -192,17 +94,13 @@ const CallModal: React.FC<CallModalProps> = ({ visible, onClose, isCaller, remot
               <Text style={styles.avatarInitial}>{remoteUser.name.charAt(0).toUpperCase()}</Text>
             </View>
             <Text style={styles.userName}>{remoteUser.name}</Text>
+            {remoteUser.role && <Text style={styles.userRole}>{remoteUser.role}</Text>}
             <View style={styles.unavailableBadge}>
               <Ionicons name="warning-outline" size={16} color="#F59E0B" />
               <Text style={styles.unavailableText}>Calls require a development build</Text>
             </View>
-            <Text style={styles.unavailableHint}>
-              This feature uses WebRTC which is not supported in Expo Go.
-              Please create a development build to use voice calls.
-            </Text>
             <TouchableOpacity style={styles.endButton} onPress={onClose}>
               <Ionicons name="close" size={24} color="white" />
-              <Text style={styles.endButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -214,34 +112,90 @@ const CallModal: React.FC<CallModalProps> = ({ visible, onClose, isCaller, remot
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.container}>
         <View style={styles.callCard}>
+          {/* AVATAR */}
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarInitial}>{remoteUser.name.charAt(0).toUpperCase()}</Text>
           </View>
           <Text style={styles.userName}>{remoteUser.name}</Text>
+          {remoteUser.role && <Text style={styles.userRole}>{remoteUser.role}</Text>}
+
+          {/* STATUS TEXT */}
           <Text style={styles.statusText}>
-            {callActive ? formatDuration(callDuration) : isCaller ? 'Calling...' : 'Incoming Call'}
+            {callStatus === 'declined'
+              ? 'Call Declined'
+              : callStatus === 'unreachable'
+                ? 'Unreachable'
+                : callStatus === 'connected'
+                  ? formatDuration(callDuration)
+                  : callStatus === 'ringing'
+                    ? 'Ringing...'
+                    : incoming
+                      ? 'Incoming Call...'
+                      : 'Calling...'}
           </Text>
 
-          {callActive && (
+          {/* CONNECTED INDICATOR */}
+          {active && (
             <View style={styles.callIndicator}>
               <View style={styles.callDot} />
               <Text style={styles.callIndicatorText}>Connected</Text>
             </View>
           )}
 
-          <View style={styles.controls}>
-            <TouchableOpacity
-              style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-              onPress={toggleMute}
-            >
-              <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color="white" />
-              <Text style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
-            </TouchableOpacity>
+          {/* CONTROLS */}
+          {incoming && !active ? (
+            // INCOMING CALL ACTION BUTTONS - MODERN DESIGN
+            <View style={styles.incomingControls}>
+              <TouchableOpacity
+                style={styles.declineButton}
+                onPress={onDecline || onHangup}
+                activeOpacity={0.8}
+              >
+                <View style={styles.declineIconCircle}>
+                  <Ionicons name="close" size={28} color="#FFF" />
+                </View>
+                <Text style={styles.actionLabel}>Decline</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity style={styles.endButton} onPress={handleEndCall}>
-              <Ionicons name="call" size={28} color="white" style={{ transform: [{ rotate: '135deg' }] }} />
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={styles.answerButton}
+                onPress={onAnswer}
+                activeOpacity={0.8}
+              >
+                <View style={styles.answerIconCircle}>
+                  <Ionicons name="call" size={28} color="#FFF" />
+                </View>
+                <Text style={styles.actionLabel}>Answer</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            // ACTIVE OR OUTGOING CONTROLS
+            <View style={styles.controls}>
+              {active && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.controlButton, isMuted && styles.controlButtonActive]}
+                    onPress={handleToggleMute}
+                  >
+                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color="white" />
+                    <Text style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
+                    onPress={toggleSpeaker}
+                  >
+                    <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={24} color="white" />
+                    <Text style={styles.controlLabel}>Speaker</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              <TouchableOpacity style={styles.endButton} onPress={onHangup}>
+                <Ionicons name="call" size={28} color="white" style={{ transform: [{ rotate: '135deg' }] }} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -268,10 +222,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
     elevation: 8,
   },
   avatarInitial: {
@@ -283,7 +233,14 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 24,
     fontWeight: '700',
+    marginBottom: 4,
+  },
+  userRole: {
+    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '500',
     marginBottom: 8,
+    textTransform: 'capitalize',
   },
   statusText: {
     color: '#94A3B8',
@@ -311,11 +268,59 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  incomingControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    width: '100%',
+    paddingHorizontal: 40,
+    marginTop: 60,
+  },
+  declineButton: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  answerButton: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  declineIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  answerIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  actionLabel: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 32,
-    marginTop: 20,
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 40,
   },
   controlButton: {
     alignItems: 'center',
@@ -341,17 +346,7 @@ const styles = StyleSheet.create({
     borderRadius: 34,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
     elevation: 6,
-  },
-  endButtonText: {
-    color: 'white',
-    fontWeight: '700',
-    fontSize: 14,
-    marginTop: 4,
   },
   unavailableBadge: {
     flexDirection: 'row',
@@ -366,16 +361,8 @@ const styles = StyleSheet.create({
   unavailableText: {
     color: '#F59E0B',
     fontSize: 14,
-    fontWeight: '600',
-  },
-  unavailableHint: {
-    color: '#64748B',
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
-    paddingHorizontal: 20,
   },
 });
 
 export default CallModal;
+

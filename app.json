@@ -16,6 +16,28 @@
     "ios": {
       "supportsTablet": true
     },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.jpeg",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json",
+      "package": "com.munawwaracare.mcmobile",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDUMMY_KEY_FOR_TESTING_ONLY"
+        }
+      }
+    },
     "plugins": [
       [
         "expo-notifications",
@@ -34,26 +56,14 @@
             "enableProguardInReleaseBuilds": true
           }
         }
-      ]
-    ],
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/logo.jpeg",
-        "backgroundColor": "#ffffff"
-      },
-      "permissions": [
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.WAKE_LOCK"
       ],
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "googleServicesFile": "./google-services.json",
-      "package": "com.munawwaracare.mcmobile",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyDUMMY_KEY_FOR_TESTING_ONLY"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Munawwara Care to access your camera for video calls.",
+          "microphonePermission": "Allow Munawwara Care to access your microphone for voice calls."
         }
-      }
-    }
+      ]
+    ]
   }
 }

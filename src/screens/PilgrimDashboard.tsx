@@ -13,9 +13,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { useIsRTL } from '../hooks/useIsRTL';
 import { socketService } from '../services/socket';
-import CallModal from '../components/CallModal';
 import { getUserId, getUserName } from '../services/user';
 import { openNavigation } from '../utils/openNavigation';
+import { useCall } from '../context/CallContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PilgrimDashboard'>;
 
@@ -45,30 +45,10 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     const sheetAnim = useRef(new Animated.Value(40)).current;
 
     const { showToast } = useToast();
-    // Call state
-    const [callModalVisible, setCallModalVisible] = useState(false);
-    const [callTarget, setCallTarget] = useState<{ id: string; name: string } | null>(null);
-    const [isCaller, setIsCaller] = useState(false);
-    // Incoming call handler
-    useEffect(() => {
-        if (!socketService.socket) return;
-        const handleCallOffer = async ({ offer, from }: { offer: any; from: string }) => {
-            // Get caller name if possible (not always available, fallback to 'Moderator')
-            let name = 'Moderator';
-            // Optionally, fetch name from groupInfo.moderators
-            if (groupInfo && groupInfo.moderators) {
-                const mod = groupInfo.moderators.find(m => m._id === from);
-                if (mod) name = mod.full_name;
-            }
-            setCallTarget({ id: from, name });
-            setIsCaller(false);
-            setCallModalVisible(true);
-        };
-        socketService.socket.on('call-offer', handleCallOffer);
-        return () => {
-            socketService.socket?.off('call-offer', handleCallOffer);
-        };
-    }, [groupInfo]);
+
+    const { startCall } = useCall();
+
+    // Legacy Call State & Effect removed. CallContext handles this now.
 
     // Initial setup & Background interval
     useEffect(() => {
@@ -97,10 +77,24 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     }, [sosActive]);
 
     useEffect(() => {
-        fetchGroupInfo();
-        setupBatteryListener();
+        const initializeScreen = async () => {
+            await fetchGroupInfo();
+            setupBatteryListener();
 
-        socketService.connect();
+            socketService.connect();
+
+            // Debug: Check what's in AsyncStorage
+            const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+            const storedUserId = await AsyncStorage.getItem('user_id');
+            console.log('[PilgrimDashboard] Stored user_id in AsyncStorage:', storedUserId);
+
+            // Register user for calls after connection with a delay
+            setTimeout(async () => {
+                await socketService.registerUser();
+            }, 1000);
+        };
+
+        initializeScreen();
 
         return () => {
             // socketService.disconnect(); // Keep connected?
@@ -315,16 +309,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                 />
             </View>
 
-            {/* Call Modal for incoming/outgoing calls */}
-            {callTarget && (
-                <CallModal
-                    visible={callModalVisible}
-                    onClose={() => { setCallModalVisible(false); setCallTarget(null); }}
-                    isCaller={isCaller}
-                    remoteUser={callTarget}
-                    socket={socketService.getSocket()}
-                />
-            )}
+
 
             {/* Header overlay */}
             <SafeAreaView style={styles.header} edges={['top']}>
@@ -416,6 +401,16 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                             >
                                 <Ionicons name="navigate-outline" size={16} color="white" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
                                 <Text style={styles.navigateModButtonText}>{t('navigate_to_moderator')}</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {groupInfo && groupInfo.moderators.length > 0 && (
+                            <TouchableOpacity
+                                style={[styles.callModButton, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                                onPress={() => startCall(groupInfo.moderators[0]._id, groupInfo.moderators[0].full_name)}
+                            >
+                                <Ionicons name="call" size={16} color="white" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
+                                <Text style={styles.navigateModButtonText}>{t('call_moderator') || 'Call Moderator'}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -630,5 +625,19 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
         letterSpacing: 0.3,
+    },
+    callModButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#2563EB',
+        borderRadius: 12,
+        paddingVertical: 12,
+        marginTop: 12,
+        elevation: 2,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
     },
 });
