@@ -14,7 +14,8 @@ import GroupCodeModal from '../components/GroupCodeModal';
 import Map from '../components/Map';
 import ComposeMessageModal from '../components/ComposeMessageModal';
 import { Ionicons } from '@expo/vector-icons';
-// import CallModal from '../components/CallModal'; // Removed local import
+// import CallModal from '../components/CallModal'; // Reimport { Ionicons } from '@expo/vector-icons';
+import CallTypeModal from '../components/CallTypeModal';
 import { useTranslation } from 'react-i18next';
 import { socketService } from '../services/socket';
 import { useIsRTL } from '../hooks/useIsRTL';
@@ -60,6 +61,12 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const [selectedPilgrim, setSelectedPilgrim] = useState<{ id: string, name: string } | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [allowPilgrimNav, setAllowPilgrimNav] = useState(false);
+
+    // New UI States
+    const [showPilgrimMenu, setShowPilgrimMenu] = useState(false);
+    const [menuPilgrim, setMenuPilgrim] = useState<Pilgrim | null>(null);
+    const [showCallTypeModal, setShowCallTypeModal] = useState(false);
+    const [callTarget, setCallTarget] = useState<{ id: string, name: string, phone: string } | null>(null);
 
     const fetchGroupDetails = async (options?: { silent?: boolean }) => {
         try {
@@ -391,17 +398,15 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                         </View>
                                     </View>
                                     <View style={[styles.pilgrimActions, isRTL && { flexDirection: 'row-reverse' }]}>
-                                        <TouchableOpacity style={styles.pilgrimIconBtn} onPress={() => { setProfilePilgrim(item); setShowProfileModal(true); }}>
-                                            <Ionicons name="person-outline" size={18} color="#475569" />
+                                        <TouchableOpacity
+                                            style={styles.pilgrimIconBtn}
+                                            onPress={() => {
+                                                setMenuPilgrim(item);
+                                                setShowPilgrimMenu(true);
+                                            }}
+                                        >
+                                            <Ionicons name="ellipsis-vertical" size={18} color="#475569" />
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={[styles.pilgrimIconBtn, styles.pilgrimIconBtnPrimary]} onPress={() => { setSelectedPilgrimId(item._id); setDirectRecipientId(item._id); setDirectRecipientName(item.full_name); setShowDirectModal(true); }}>
-                                            <Ionicons name="megaphone-outline" size={18} color="white" />
-                                        </TouchableOpacity>
-                                        {item.location && (
-                                            <TouchableOpacity style={[styles.pilgrimIconBtn, { backgroundColor: '#10B981' }]} onPress={() => openNavigation(item.location!.lat, item.location!.lng, item.full_name)}>
-                                                <Ionicons name="navigate-outline" size={18} color="white" />
-                                            </TouchableOpacity>
-                                        )}
                                     </View>
                                 </TouchableOpacity>
                             </Swipeable>
@@ -601,6 +606,108 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {/* Pilgrim Action Menu */}
+            <Modal visible={showPilgrimMenu} transparent={true} animationType="fade" onRequestClose={() => setShowPilgrimMenu(false)}>
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPilgrimMenu(false)}>
+                    <View style={styles.actionSheetContent}>
+                        <Text style={styles.actionSheetTitle}>{menuPilgrim?.full_name}</Text>
+
+                        {menuPilgrim?.phone_number && (
+                            <TouchableOpacity
+                                style={[styles.actionOption, isRTL && { flexDirection: 'row-reverse' }]}
+                                onPress={() => {
+                                    setShowPilgrimMenu(false);
+                                    if (menuPilgrim) {
+                                        setCallTarget({
+                                            id: menuPilgrim._id,
+                                            name: menuPilgrim.full_name,
+                                            phone: menuPilgrim.phone_number
+                                        });
+                                        setShowCallTypeModal(true);
+                                    }
+                                }}
+                            >
+                                <Ionicons name="call-outline" size={22} color="#0EA5E9" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 16 }} />
+                                <Text style={styles.actionOptionText}>{t('call')}</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                            style={[styles.actionOption, isRTL && { flexDirection: 'row-reverse' }]}
+                            onPress={() => {
+                                setShowPilgrimMenu(false);
+                                if (menuPilgrim) {
+                                    setDirectRecipientId(menuPilgrim._id);
+                                    setDirectRecipientName(menuPilgrim.full_name);
+                                    setShowDirectModal(true);
+                                }
+                            }}
+                        >
+                            <Ionicons name="chatbubble-outline" size={22} color="#8B5CF6" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 16 }} />
+                            <Text style={styles.actionOptionText}>{t('message')}</Text>
+                        </TouchableOpacity>
+
+                        {menuPilgrim?.location && (
+                            <TouchableOpacity
+                                style={[styles.actionOption, isRTL && { flexDirection: 'row-reverse' }]}
+                                onPress={() => {
+                                    setShowPilgrimMenu(false);
+                                    if (menuPilgrim?.location) {
+                                        openNavigation(menuPilgrim.location.lat, menuPilgrim.location.lng, menuPilgrim.full_name);
+                                    }
+                                }}
+                            >
+                                <Ionicons name="navigate-outline" size={22} color="#10B981" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 16 }} />
+                                <Text style={styles.actionOptionText}>{t('navigate')}</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                            style={[styles.actionOption, isRTL && { flexDirection: 'row-reverse' }]}
+                            onPress={() => {
+                                setShowPilgrimMenu(false);
+                                setProfilePilgrim(menuPilgrim);
+                                setShowProfileModal(true);
+                            }}
+                        >
+                            <Ionicons name="person-circle-outline" size={22} color="#64748B" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 16 }} />
+                            <Text style={styles.actionOptionText}>{t('view_profile')}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.actionOption, isRTL && { flexDirection: 'row-reverse' }]}
+                            onPress={() => {
+                                setShowPilgrimMenu(false);
+                                if (menuPilgrim) {
+                                    setSelectedPilgrim({ id: menuPilgrim._id, name: menuPilgrim.full_name });
+                                    setShowDeletePilgrimModal(true);
+                                }
+                            }}
+                        >
+                            <Ionicons name="trash-outline" size={22} color="#EF4444" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 16 }} />
+                            <Text style={[styles.actionOptionText, { color: '#EF4444' }]}>{t('remove_pilgrim')}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.cancelOption} onPress={() => setShowPilgrimMenu(false)}>
+                            <Text style={styles.cancelOptionText}>{t('cancel')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* Call Type Modal */}
+            <CallTypeModal
+                visible={showCallTypeModal}
+                onClose={() => setShowCallTypeModal(false)}
+                onInternetCall={() => {
+                    if (callTarget) {
+                        startCall(callTarget.id, callTarget.name);
+                    }
+                }}
+                phoneNumber={callTarget?.phone}
+                name={callTarget?.name || ''}
+            />
 
             <GroupCodeModal visible={showGroupCodeModal} onClose={() => setShowGroupCodeModal(false)} groupId={groupId} groupName={groupName} />
         </GestureHandlerRootView>

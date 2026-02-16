@@ -275,5 +275,15 @@
     "passport_label": "جواز السفر",
     "national_id_or_passport": "الهوية الوطنية أو جواز السفر",
     "invalid_id": "رقم الهوية غير صحيح",
-    "invalid_passport": "رقم جواز السفر غير صحيح"
+    "invalid_passport": "رقم جواز السفر غير صحيح",
+    "call_moderator": "اتصال بالمشرف",
+    "call_history": "سجل المكالمات",
+    "internet_call": "مكالمة عبر الإنترنت",
+    "phone_call": "مكالمة هاتفية",
+    "free_app_call": "مكالمة مجانية عبر التطبيق",
+    "call": "اتصال",
+    "message": "رسالة",
+    "navigate": "توجيه",
+    "view_profile": "عرض الملف الشخصي",
+    "remove_pilgrim": "إزالة الحاج"
 }

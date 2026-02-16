@@ -14,4 +14,5 @@ export type RootStackParamList = {
     ModeratorMessagesScreen: { groupId: string; groupName: string };
     JoinGroup: { userId: string };
     CommunicationScreen: { groupId: string };
+    CallHistory: undefined;
 };

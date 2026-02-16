@@ -68,6 +68,11 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [localStream, setLocalStream] = useState<any>(null);
     const [remoteStream, setRemoteStream] = useState<any>(null);
 
+    // WebRTC connection state refs
+    const remoteDescriptionSet = useRef(false);
+    const iceCandidateQueue = useRef<any[]>([]);
+    const pendingOffer = useRef<any>(null);
+
     // Socket listeners setup
     useEffect(() => {
         // We no longer rely on getSocket() being non-null here.
@@ -92,12 +97,29 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
 
             pendingOffer.current = offer;
+            remoteDescriptionSet.current = false; // Reset for new call
+            iceCandidateQueue.current = [];
         };
 
         const handleCallAnswer = async ({ answer }: { answer: any }) => {
             if (pc.current && callState.isOutgoing) {
                 try {
                     await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
+                    remoteDescriptionSet.current = true;
+
+                    // Process queued candidates
+                    if (iceCandidateQueue.current.length > 0) {
+                        console.log(`[CallContext] Processing ${iceCandidateQueue.current.length} queued candidates`);
+                        for (const candidate of iceCandidateQueue.current) {
+                            try {
+                                await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
+                            } catch (e) {
+                                console.error('Error adding queued ice candidate:', e);
+                            }
+                        }
+                        iceCandidateQueue.current = [];
+                    }
+
                     setCallState(prev => ({ ...prev, isActive: true, isOutgoing: false, isIncoming: false, callStatus: 'connected' }));
                 } catch (e) {
                     console.error('Error setting remote description:', e);
@@ -107,10 +129,15 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const handleIceCandidate = async ({ candidate }: { candidate: any }) => {
             if (pc.current) {
-                try {
-                    await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
-                } catch (e) {
-                    console.error('Error adding ice candidate:', e);
+                if (!remoteDescriptionSet.current) {
+                    console.log('[CallContext] Queueing ICE candidate (remote description not set)');
+                    iceCandidateQueue.current.push(candidate);
+                } else {
+                    try {
+                        await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
+                    } catch (e) {
+                        console.error('Error adding ice candidate:', e);
+                    }
                 }
             }
         };
@@ -157,8 +184,6 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
     }, [callState.isActive, callState.isIncoming, callState.isOutgoing]);
 
-    const pendingOffer = useRef<any>(null);
-
     const startCall = async (userId: string, userName: string, userRole?: string) => {
         if (!webrtcAvailable) {
             Alert.alert('Not Supported', 'Calls verify development build.');
@@ -174,6 +199,10 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             callStatus: 'calling',
             remoteUser: { id: userId, name: userName, role: userRole },
         });
+
+        // Reset refs for new call
+        remoteDescriptionSet.current = false;
+        iceCandidateQueue.current = [];
 
         // Set timeout for unreachable (30 seconds)
         const callTimeout = setTimeout(() => {
@@ -289,6 +318,21 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (pendingOffer.current) {
                     console.log('[CallContext] Answering call from:', remoteId);
                     await pc.current.setRemoteDescription(new RTCSessionDescription(pendingOffer.current));
+                    remoteDescriptionSet.current = true; // Mark remote description as set
+
+                    // Process any queued candidates that arrived while processing offer
+                    if (iceCandidateQueue.current.length > 0) {
+                        console.log(`[CallContext] Processing ${iceCandidateQueue.current.length} queued candidates (Answer Side)`);
+                        for (const candidate of iceCandidateQueue.current) {
+                            try {
+                                await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
+                            } catch (e) {
+                                console.error('Error adding queued ice candidate:', e);
+                            }
+                        }
+                        iceCandidateQueue.current = [];
+                    }
+
                     const answer = await pc.current.createAnswer();
                     await pc.current.setLocalDescription(answer);
                     console.log('[CallContext] Emitting call-answer to:', remoteId);

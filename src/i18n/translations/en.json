@@ -276,5 +276,14 @@
     "national_id_or_passport": "National ID or Passport",
     "invalid_id": "Invalid National ID",
     "invalid_passport": "Invalid Passport Number",
-    "call_moderator": "Call Moderator"
+    "call_moderator": "Call Moderator",
+    "call_history": "Call History",
+    "internet_call": "Internet Call",
+    "phone_call": "Phone Call",
+    "free_app_call": "Free app-to-app call",
+    "call": "Call",
+    "message": "Message",
+    "navigate": "Navigate",
+    "view_profile": "View Profile",
+    "remove_pilgrim": "Remove Pilgrim"
 }

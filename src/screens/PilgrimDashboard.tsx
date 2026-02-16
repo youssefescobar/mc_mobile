@@ -314,12 +314,20 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
             {/* Header overlay */}
             <SafeAreaView style={styles.header} edges={['top']}>
                 <View style={[styles.headerContent, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                    <TouchableOpacity
-                        style={styles.profileButton}
-                        onPress={() => navigation.navigate('PilgrimProfile', { userId: route.params.userId })}
-                    >
-                        <Ionicons name="person-circle-outline" size={28} color="#0F172A" />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity
+                            style={styles.profileButton}
+                            onPress={() => navigation.navigate('PilgrimProfile', { userId: route.params.userId })}
+                        >
+                            <Ionicons name="person-circle-outline" size={28} color="#0F172A" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.profileButton, { marginLeft: 12 }]}
+                            onPress={() => navigation.navigate('CallHistory')}
+                        >
+                            <Ionicons name="time-outline" size={24} color="#0F172A" />
+                        </TouchableOpacity>
+                    </View>
                     <TouchableOpacity onPress={handleSOS} activeOpacity={0.8}>
                         <Animated.View style={[
                             styles.sosButton,

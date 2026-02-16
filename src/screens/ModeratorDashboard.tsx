@@ -265,6 +265,13 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                 <View style={styles.headerActions}>
                     <TouchableOpacity
                         style={styles.notificationButton}
+                        onPress={() => navigation.navigate('CallHistory')}
+                    >
+                        <Ionicons name="call-outline" size={24} color="#333" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.notificationButton}
                         onPress={() => navigation.navigate('Notifications')}
                     >
                         <Ionicons name="notifications-outline" size={24} color="#333" />
@@ -784,7 +791,7 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        bottom: 40,
+        bottom: 90,
         right: 20,
         backgroundColor: '#2563EB',
         width: 60,
