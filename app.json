@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "mc_mobile",
+    "name": "Munawwara Care",
     "slug": "mc_mobile",
     "version": "1.0.0",
     "scheme": "mc_mobile",
     "orientation": "portrait",
-    "icon": "./assets/logo.jpeg",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-screen.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -18,7 +18,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo.jpeg",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
@@ -42,7 +42,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/logo.jpeg",
+          "icon": "./assets/icon.png",
           "color": "#ffffff",
           "defaultChannel": "default",
           "sounds": []

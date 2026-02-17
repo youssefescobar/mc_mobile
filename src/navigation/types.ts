@@ -1,5 +1,6 @@
 export type RootStackParamList = {
     Login: undefined;
+    Welcome: undefined;
     SignUp: undefined;
     VerifyEmail: { email: string; isPilgrim?: boolean; postVerifyAction?: 'request-moderator' };
     CreateGroup: undefined;

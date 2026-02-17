@@ -21,6 +21,7 @@ import ModeratorMessagesScreen from '../screens/ModeratorMessagesScreen';
 import JoinGroupScreen from '../screens/JoinGroupScreen';
 import CommunicationScreen from '../screens/CommunicationScreen';
 import CallHistoryScreen from '../screens/CallHistoryScreen';
+import WelcomeScreen from '../screens/WelcomeScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -39,7 +40,8 @@ export default function AppNavigator() {
     return (
         <ToastProvider>
             <NavigationContainer linking={linking}>
-                <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+                <Stack.Navigator initialRouteName="Welcome" screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="Welcome" component={WelcomeScreen} />
                     <Stack.Screen name="Login" component={LoginScreen} />
                     <Stack.Screen name="SignUp" component={SignUpScreen} />
                     <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
