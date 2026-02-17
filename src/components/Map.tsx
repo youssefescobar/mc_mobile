@@ -4,6 +4,13 @@ import { View, Text, StyleSheet } from 'react-native';
 interface MapProps {
     onLocationUpdate?: (location: any) => void;
     markers?: any[];
+    initialRegion?: any;
+    highlightedMarkerId?: string | null;
+    followsUserLocation?: boolean;
+    showsUserLocation?: boolean;
+    provider?: any;
+    style?: any;
+    region?: any;
 }
 
 const Map = ({ onLocationUpdate, markers }: MapProps) => {
