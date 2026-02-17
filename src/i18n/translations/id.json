@@ -273,5 +273,18 @@
     "passport_label": "Paspor",
     "national_id_or_passport": "KTP Nasional atau Paspor",
     "invalid_id": "Nomor Identitas Tidak Valid",
-    "invalid_passport": "Nomor Paspor Tidak Valid"
+    "invalid_passport": "Nomor Paspor Tidak Valid",
+    "suggested_areas": "Area yang Disarankan",
+    "suggest_area": "Sarankan Area",
+    "area_name": "Nama Area",
+    "area_description": "Deskripsi (opsional)",
+    "tap_map_to_pin": "Ketuk peta untuk mengatur lokasi",
+    "navigate_to_area": "Navigasi",
+    "area_added": "Area berhasil ditambahkan",
+    "area_deleted": "Area dihapus",
+    "no_suggested_areas": "Belum ada area yang disarankan",
+    "add_area": "Tambah Area",
+    "search_location": "Cari lokasi...",
+    "are_you_sure": "Apakah Anda yakin?",
+    "delete_area": "Hapus Area"
 }

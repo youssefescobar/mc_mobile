@@ -50,13 +50,12 @@ const COUNTRY_CODES = [
     { code: '+234', flag: '🇳🇬', region: 'NG', name: 'Nigeria' },
 ];
 
-import { isValidSaudiID, isValidPassport } from '../utils/validation';
+import { isValidPassport } from '../utils/validation';
 
 export default function SignUpScreen({ navigation }: Props) {
     const { t, i18n } = useTranslation();
     const [fullName, setFullName] = useState('');
-    const [nationalId, setNationalId] = useState('');
-    const [identityType, setIdentityType] = useState<'national_id' | 'passport'>('national_id');
+    const [passportNumber, setPassportNumber] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
     const [selectedCountryCode, setSelectedCountryCode] = useState(COUNTRY_CODES[0]);
     const [password, setPassword] = useState('');
@@ -89,14 +88,14 @@ export default function SignUpScreen({ navigation }: Props) {
 
     const [phoneError, setPhoneError] = useState(false);
     const [nameError, setNameError] = useState(false);
-    const [idError, setIdError] = useState(false);
+    const [passportError, setPassportError] = useState(false);
     const [passwordError, setPasswordError] = useState(false);
 
     const handleSignUp = async () => {
         // Reset all errors
         setPhoneError(false);
         setNameError(false);
-        setIdError(false);
+        setPassportError(false);
         setPasswordError(false);
 
         let isValid = true;
@@ -106,21 +105,14 @@ export default function SignUpScreen({ navigation }: Props) {
             isValid = false;
         }
 
-        // Validate ID based on type
-        if (!nationalId) {
-            setIdError(true);
+        // Validate Passport
+        if (!passportNumber) {
+            setPassportError(true);
             isValid = false;
         } else {
-            if (identityType === 'national_id') {
-                if (!isValidSaudiID(nationalId)) {
-                    setIdError(true);
-                    isValid = false;
-                }
-            } else {
-                if (!isValidPassport(nationalId)) {
-                    setIdError(true);
-                    isValid = false;
-                }
+            if (!isValidPassport(passportNumber)) {
+                setPassportError(true);
+                isValid = false;
             }
         }
 
@@ -151,11 +143,11 @@ export default function SignUpScreen({ navigation }: Props) {
         setLoading(true);
         try {
             const fullPhoneNumber = `${selectedCountryCode.code}${phoneNumber}`;
-            console.log('Registering pilgrim:', nationalId, fullPhoneNumber);
+            console.log('Registering pilgrim:', passportNumber, fullPhoneNumber);
 
             const response = await api.post('/auth/register', {
                 full_name: fullName,
-                national_id: nationalId,
+                national_id: passportNumber, // Backend expects national_id but we send passport number
                 phone_number: fullPhoneNumber,
                 password,
                 email: email.trim() || undefined,
@@ -166,19 +158,8 @@ export default function SignUpScreen({ navigation }: Props) {
             const { token, role, user_id } = response.data;
 
             setAuthToken(token);
-
-            showToast(
-                t('account_created'),
-                'success',
-                {
-                    title: t('welcome_munawwara'),
-                    actionLabel: t('continue'),
-                    onAction: () => navigation.replace('PilgrimDashboard', { userId: user_id })
-                }
-            );
-
-            // Auto-navigate after showing success
-            setTimeout(() => navigation.replace('PilgrimDashboard', { userId: user_id }), 2000);
+            // Navigate directly to dashboard
+            navigation.replace('PilgrimDashboard', { userId: user_id });
         } catch (error: any) {
             console.error('Registration Error:', error);
 
@@ -302,53 +283,27 @@ export default function SignUpScreen({ navigation }: Props) {
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('national_id_or_passport')} *</Text>
-
-                            {/* Identity Type Toggle */}
-                            <View style={styles.identityToggleContainer}>
-                                <TouchableOpacity
-                                    style={[styles.identityToggleButton, identityType === 'national_id' && styles.identityToggleButtonActive]}
-                                    onPress={() => {
-                                        setIdentityType('national_id');
-                                        setIdError(false);
-                                    }}
-                                >
-                                    <Text style={[styles.identityToggleButtonText, identityType === 'national_id' && styles.identityToggleButtonTextActive]}>
-                                        {t('national_id_label')}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.identityToggleButton, identityType === 'passport' && styles.identityToggleButtonActive]}
-                                    onPress={() => {
-                                        setIdentityType('passport');
-                                        setIdError(false);
-                                    }}
-                                >
-                                    <Text style={[styles.identityToggleButtonText, identityType === 'passport' && styles.identityToggleButtonTextActive]}>
-                                        {t('passport_label')}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
+                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('passport_label')} *</Text>
 
                             <TextInput
                                 style={[
                                     styles.input,
                                     { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' },
-                                    idError && { borderColor: '#EF4444', borderWidth: 1.5 }
+                                    passportError && { borderColor: '#EF4444', borderWidth: 1.5 }
                                 ]}
-                                placeholder={identityType === 'national_id' ? t('national_id_label') : t('passport_label')}
+                                placeholder={t('passport_label')}
                                 placeholderTextColor="#999"
-                                value={nationalId}
+                                value={passportNumber}
                                 onChangeText={(text) => {
-                                    setNationalId(text);
-                                    if (idError) setIdError(false);
+                                    setPassportNumber(text);
+                                    if (passportError) setPassportError(false);
                                 }}
-                                keyboardType={identityType === 'national_id' ? "numeric" : "default"}
-                                maxLength={identityType === 'national_id' ? 10 : 20}
+                                keyboardType="default"
+                                maxLength={20}
                             />
-                            {idError && (
+                            {passportError && (
                                 <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginLeft: 4, textAlign: (i18n.language === 'ar' || i18n.language === 'ur') ? 'right' : 'left' }}>
-                                    {identityType === 'national_id' ? t('invalid_id') : t('invalid_passport')}
+                                    {t('invalid_passport')}
                                 </Text>
                             )}
                         </View>
@@ -675,35 +630,5 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#333',
         height: '100%',
-    },
-    identityToggleContainer: {
-        flexDirection: 'row',
-        backgroundColor: '#F3F4F6',
-        borderRadius: 12,
-        padding: 4,
-        marginBottom: 10,
-    },
-    identityToggleButton: {
-        flex: 1,
-        paddingVertical: 8,
-        alignItems: 'center',
-        borderRadius: 8,
-    },
-    identityToggleButtonActive: {
-        backgroundColor: 'white',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    identityToggleButtonText: {
-        fontSize: 14,
-        color: '#666',
-        fontWeight: '500',
-    },
-    identityToggleButtonTextActive: {
-        color: '#007AFF',
-        fontWeight: '700',
     },
 });

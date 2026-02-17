@@ -285,5 +285,18 @@
     "message": "Message",
     "navigate": "Navigate",
     "view_profile": "View Profile",
-    "remove_pilgrim": "Remove Pilgrim"
+    "remove_pilgrim": "Remove Pilgrim",
+    "suggested_areas": "Suggested Areas",
+    "suggest_area": "Suggest Area",
+    "area_name": "Area Name",
+    "area_description": "Description (optional)",
+    "tap_map_to_pin": "Tap the map to set location",
+    "navigate_to_area": "Navigate",
+    "area_added": "Area added successfully",
+    "area_deleted": "Area removed",
+    "no_suggested_areas": "No suggested areas yet",
+    "add_area": "Add Area",
+    "search_location": "Search location...",
+    "are_you_sure": "Are you sure?",
+    "delete_area": "Remove Area"
 }

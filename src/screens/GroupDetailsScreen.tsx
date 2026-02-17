@@ -1,6 +1,12 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, Linking, Share, RefreshControl, Switch, Animated as RNAnimated } from 'react-native';
+import {
+    View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Modal, Alert,
+    KeyboardAvoidingView, Platform, Switch, RefreshControl, ActivityIndicator, Dimensions,
+    ScrollView, Share, Linking, Animated as RNAnimated
+} from 'react-native';
+import MapView, { Marker, MapPressEvent } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useIsFocused } from '@react-navigation/native';
@@ -67,6 +73,81 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const [menuPilgrim, setMenuPilgrim] = useState<Pilgrim | null>(null);
     const [showCallTypeModal, setShowCallTypeModal] = useState(false);
     const [callTarget, setCallTarget] = useState<{ id: string, name: string, phone: string } | null>(null);
+
+    // Suggested Areas
+    const [suggestedAreas, setSuggestedAreas] = useState<any[]>([]);
+    const [showSuggestAreaModal, setShowSuggestAreaModal] = useState(false);
+    const [newAreaName, setNewAreaName] = useState('');
+    const [newAreaDesc, setNewAreaDesc] = useState('');
+    const [newAreaCoord, setNewAreaCoord] = useState<{ latitude: number; longitude: number } | null>(null);
+    const [addingArea, setAddingArea] = useState(false);
+    const [areaSearchQuery, setAreaSearchQuery] = useState('');
+    const [searching, setSearching] = useState(false);
+    const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
+    const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+    const areaMapRef = useRef<MapView>(null);
+    const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Get moderator's GPS when modal opens
+    useEffect(() => {
+        if (!showSuggestAreaModal) return;
+        (async () => {
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') return;
+                const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+                setMyLocation(coords);
+                areaMapRef.current?.animateToRegion({
+                    ...coords, latitudeDelta: 0.02, longitudeDelta: 0.02
+                }, 500);
+            } catch (e) {
+                console.log('Could not get location for modal map');
+            }
+        })();
+    }, [showSuggestAreaModal]);
+
+    // Nominatim autocomplete search with debounce
+    const handleSearchChange = (text: string) => {
+        setAreaSearchQuery(text);
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        if (!text.trim() || text.trim().length < 2) {
+            setSearchSuggestions([]);
+            return;
+        }
+        searchTimerRef.current = setTimeout(async () => {
+            try {
+                setSearching(true);
+                const viewbox = myLocation
+                    ? `&viewbox=${myLocation.longitude - 0.5},${myLocation.latitude + 0.5},${myLocation.longitude + 0.5},${myLocation.latitude - 0.5}&bounded=0`
+                    : '';
+                const latlon = myLocation ? `&lat=${myLocation.latitude}&lon=${myLocation.longitude}` : '';
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text.trim())}&limit=5${latlon}${viewbox}&addressdetails=1`;
+                const resp = await fetch(url, { headers: { 'User-Agent': 'DurrahCareApp/1.0' } });
+                const data = await resp.json();
+                setSearchSuggestions(data);
+            } catch {
+                setSearchSuggestions([]);
+            } finally {
+                setSearching(false);
+            }
+        }, 400);
+    };
+
+    const handleSelectSuggestion = (suggestion: any) => {
+        const lat = parseFloat(suggestion.lat);
+        const lon = parseFloat(suggestion.lon);
+        setNewAreaCoord({ latitude: lat, longitude: lon });
+        setAreaSearchQuery(suggestion.display_name.split(',')[0]);
+        if (!newAreaName.trim()) setNewAreaName(suggestion.display_name.split(',')[0]);
+        setSearchSuggestions([]);
+        areaMapRef.current?.animateToRegion({
+            latitude: lat, longitude: lon,
+            latitudeDelta: 0.005, longitudeDelta: 0.005
+        }, 500);
+    };
+
+
 
     const fetchGroupDetails = async (options?: { silent?: boolean }) => {
         try {
@@ -229,15 +310,81 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         }
     };
 
+    // Fetch suggested areas
+    const fetchSuggestedAreas = async () => {
+        try {
+            const res = await api.get(`/groups/${groupId}/suggested-areas`);
+            setSuggestedAreas(res.data.areas || []);
+        } catch (e) {
+            console.error('Error fetching suggested areas:', e);
+        }
+    };
+
+    const handleAddSuggestedArea = async () => {
+        if (!newAreaName.trim() || !newAreaCoord) return;
+        setAddingArea(true);
+        try {
+            await api.post(`/groups/${groupId}/suggested-areas`, {
+                name: newAreaName.trim(),
+                description: newAreaDesc.trim(),
+                latitude: newAreaCoord.latitude,
+                longitude: newAreaCoord.longitude
+            });
+            showToast(t('area_added'), 'success');
+            setShowSuggestAreaModal(false);
+            setNewAreaName('');
+            setNewAreaDesc('');
+            setNewAreaCoord(null);
+            fetchSuggestedAreas();
+        } catch (e: any) {
+            showToast(e.response?.data?.message || 'Error', 'error');
+        } finally {
+            setAddingArea(false);
+        }
+    };
+
+    const handleDeleteSuggestedArea = async (areaId: string) => {
+        Alert.alert(t('delete_area'), t('are_you_sure') || 'Are you sure?', [
+            { text: t('cancel'), style: 'cancel' },
+            {
+                text: t('delete_area'),
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await api.delete(`/groups/${groupId}/suggested-areas/${areaId}`);
+                        showToast(t('area_deleted'), 'success');
+                        fetchSuggestedAreas();
+                    } catch (e: any) {
+                        showToast(e.response?.data?.message || 'Error', 'error');
+                    }
+                }
+            }
+        ]);
+    };
+
+    // Fetch suggested areas on mount
+    useEffect(() => { fetchSuggestedAreas(); }, [groupId]);
+
     const pilgrimsWithLocation = pilgrims.filter(p => p.location && p.location.lat && p.location.lng);
-    const mapMarkers = pilgrimsWithLocation.map(p => ({
+    const pilgrimMarkers = pilgrimsWithLocation.map(p => ({
         id: p._id,
         latitude: p.location!.lat,
         longitude: p.location!.lng,
         title: p.full_name,
         description: `${t('battery')}: ${p.battery_percent || '?'}%`,
-        pinColor: (p as any).isSos ? 'red' : 'blue' // Use red for SOS
+        pinColor: (p as any).isSos ? 'red' : 'blue'
     }));
+
+    const suggestedAreaMarkers = suggestedAreas.map(a => ({
+        id: `area-${a._id}`,
+        latitude: a.latitude,
+        longitude: a.longitude,
+        title: `📍 ${a.name}`,
+        description: a.description || t('suggested_areas'),
+        pinColor: '#F59E0B' // Orange/amber for suggested areas
+    }));
+
+    const mapMarkers = [...pilgrimMarkers, ...suggestedAreaMarkers];
 
     const getInitialRegion = () => {
         if (!pilgrimsWithLocation.length) return undefined;
@@ -456,6 +603,10 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                         <TouchableOpacity style={[styles.actionOption, isRTL && { flexDirection: 'row-reverse' }]} onPress={() => { setShowActionMenu(false); setShowGroupCodeModal(true); }}>
                             <Ionicons name="qr-code-outline" size={22} color="#334155" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 16 }} />
                             <Text style={styles.actionOptionText}>{t('view_group_code')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionOption, isRTL && { flexDirection: 'row-reverse' }]} onPress={() => { setShowActionMenu(false); setShowSuggestAreaModal(true); }}>
+                            <Ionicons name="location-outline" size={22} color="#334155" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 16 }} />
+                            <Text style={styles.actionOptionText}>{t('suggest_area')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.cancelOption} onPress={() => setShowActionMenu(false)}>
                             <Text style={styles.cancelOptionText}>{t('cancel')}</Text>
@@ -710,6 +861,115 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
             />
 
             <GroupCodeModal visible={showGroupCodeModal} onClose={() => setShowGroupCodeModal(false)} groupId={groupId} groupName={groupName} />
+
+            {/* Suggest Area Modal */}
+            <Modal visible={showSuggestAreaModal} transparent={true} animationType="slide" onRequestClose={() => setShowSuggestAreaModal(false)}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+                    <View style={styles.suggestAreaModal}>
+                        <View style={[styles.modalHeader, isRTL && { flexDirection: 'row-reverse' }]}>
+                            <Text style={styles.modalTitle}>{t('suggest_area')}</Text>
+                            <TouchableOpacity onPress={() => setShowSuggestAreaModal(false)}><Text style={styles.closeText}>✕</Text></TouchableOpacity>
+                        </View>
+
+                        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                            {/* Search for a place */}
+                            <View style={[styles.searchRow, isRTL && { flexDirection: 'row-reverse' }]}>
+                                <TextInput
+                                    style={[styles.locationSearchInput, isRTL && { textAlign: 'right' }]}
+                                    placeholder={t('search_location') || 'Search location...'}
+                                    placeholderTextColor="#94A3B8"
+                                    value={areaSearchQuery}
+                                    onChangeText={handleSearchChange}
+                                    returnKeyType="search"
+                                />
+                                {searching && <ActivityIndicator size="small" color="#2563EB" style={{ position: 'absolute', right: isRTL ? undefined : 12, left: isRTL ? 12 : undefined }} />}
+                            </View>
+
+                            {/* Autocomplete suggestions */}
+                            {searchSuggestions.length > 0 && (
+                                <View style={styles.suggestionsContainer}>
+                                    {searchSuggestions.map((s: any, idx: number) => (
+                                        <TouchableOpacity
+                                            key={s.place_id || idx}
+                                            style={[styles.suggestionItem, idx < searchSuggestions.length - 1 && styles.suggestionBorder]}
+                                            onPress={() => handleSelectSuggestion(s)}
+                                        >
+                                            <Ionicons name="location-outline" size={16} color="#F59E0B" style={{ marginRight: 8 }} />
+                                            <Text style={styles.suggestionText} numberOfLines={2}>{s.display_name}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )}
+
+                            <TextInput
+                                style={[styles.input, isRTL && { textAlign: 'right' }]}
+                                placeholder={t('area_name')}
+                                placeholderTextColor="#94A3B8"
+                                value={newAreaName}
+                                onChangeText={setNewAreaName}
+                            />
+                            <TextInput
+                                style={[styles.input, isRTL && { textAlign: 'right' }]}
+                                placeholder={t('area_description')}
+                                placeholderTextColor="#94A3B8"
+                                value={newAreaDesc}
+                                onChangeText={setNewAreaDesc}
+                            />
+
+                            <Text style={[styles.tapMapHint, isRTL && { textAlign: 'right' }]}>{t('tap_map_to_pin')}</Text>
+                            <View style={styles.miniMapContainer}>
+                                <MapView
+                                    ref={areaMapRef}
+                                    style={styles.miniMap}
+                                    initialRegion={{
+                                        latitude: myLocation?.latitude || 21.4225,
+                                        longitude: myLocation?.longitude || 39.8262,
+                                        latitudeDelta: 0.02,
+                                        longitudeDelta: 0.02,
+                                    }}
+                                    showsUserLocation={true}
+                                    showsMyLocationButton={true}
+                                    onPress={(e: MapPressEvent) => setNewAreaCoord(e.nativeEvent.coordinate)}
+                                >
+                                    {newAreaCoord && (
+                                        <Marker
+                                            coordinate={newAreaCoord}
+                                            pinColor="#F59E0B"
+                                            title={newAreaName || t('suggest_area')}
+                                        />
+                                    )}
+                                </MapView>
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.addButton, (!newAreaName.trim() || !newAreaCoord || addingArea) && styles.buttonDisabled]}
+                                onPress={handleAddSuggestedArea}
+                                disabled={!newAreaName.trim() || !newAreaCoord || addingArea}
+                            >
+                                <Text style={styles.addButtonText}>{addingArea ? '...' : t('add_area')}</Text>
+                            </TouchableOpacity>
+
+                            {/* Existing Suggested Areas */}
+                            {suggestedAreas.length > 0 && (
+                                <View style={styles.existingAreasSection}>
+                                    <Text style={[styles.existingAreasTitle, isRTL && { textAlign: 'right' }]}>{t('suggested_areas')}</Text>
+                                    {suggestedAreas.map(area => (
+                                        <View key={area._id} style={[styles.areaRow, isRTL && { flexDirection: 'row-reverse' }]}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.areaName, isRTL && { textAlign: 'right' }]}>📍 {area.name}</Text>
+                                                {area.description ? <Text style={[styles.areaDesc, isRTL && { textAlign: 'right' }]}>{area.description}</Text> : null}
+                                            </View>
+                                            <TouchableOpacity onPress={() => handleDeleteSuggestedArea(area._id)} style={styles.areaDeleteBtn}>
+                                                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </ScrollView>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </GestureHandlerRootView>
     );
 }
@@ -1206,5 +1466,111 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         marginTop: 4,
+    },
+    suggestAreaModal: {
+        backgroundColor: 'white',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        maxHeight: '85%',
+        width: '100%',
+    },
+    tapMapHint: {
+        fontSize: 13,
+        color: '#64748B',
+        marginBottom: 8,
+        marginTop: 4,
+    },
+    miniMapContainer: {
+        height: 200,
+        borderRadius: 12,
+        overflow: 'hidden',
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    miniMap: {
+        width: '100%',
+        height: '100%',
+    },
+    existingAreasSection: {
+        marginTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#E2E8F0',
+        paddingTop: 12,
+    },
+    existingAreasTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#334155',
+        marginBottom: 8,
+    },
+    areaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    areaName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1E293B',
+    },
+    areaDesc: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    areaDeleteBtn: {
+        padding: 8,
+    },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        gap: 8,
+    },
+    locationSearchInput: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        padding: 12,
+        fontSize: 14,
+        color: '#1E293B',
+    },
+    searchBtn: {
+        backgroundColor: '#2563EB',
+        borderRadius: 10,
+        padding: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    suggestionsContainer: {
+        backgroundColor: 'white',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        marginBottom: 8,
+        maxHeight: 200,
+        overflow: 'hidden',
+    },
+    suggestionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+    },
+    suggestionBorder: {
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    suggestionText: {
+        flex: 1,
+        fontSize: 13,
+        color: '#334155',
+        lineHeight: 18,
     },
 });

@@ -55,6 +55,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     const [unreadCount, setUnreadCount] = useState(0);
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const sheetAnim = useRef(new Animated.Value(40)).current;
+    const [suggestedAreas, setSuggestedAreas] = useState<any[]>([]);
 
     const { showToast } = useToast();
 
@@ -216,6 +217,20 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         };
     }, [groupInfo]);
 
+    // Fetch suggested areas when group is known
+    useEffect(() => {
+        if (!groupInfo) return;
+        const fetchAreas = async () => {
+            try {
+                const res = await api.get(`/groups/${groupInfo.group_id}/suggested-areas`);
+                setSuggestedAreas(res.data.areas || []);
+            } catch (e) {
+                console.log('No suggested areas');
+            }
+        };
+        fetchAreas();
+    }, [groupInfo]);
+
     const fetchUnreadCount = async (gId: string) => {
         try {
             const res = await api.get(`/messages/group/${gId}/unread`);
@@ -355,16 +370,25 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
             <View style={styles.mapContainer}>
                 <Map
                     onLocationUpdate={handleLocationUpdate}
-                    markers={groupInfo?.moderators
-                        .filter(m => m.current_latitude !== undefined && m.current_longitude !== undefined)
-                        .map(m => ({
-                            id: m._id,
-                            latitude: m.current_latitude!,
-                            longitude: m.current_longitude!,
-                            title: `${t('moderator')}: ${m.full_name}`,
-                            description: t('group_leader')
-                        })) || []
-                    }
+                    markers={[
+                        ...(groupInfo?.moderators
+                            .filter(m => m.current_latitude !== undefined && m.current_longitude !== undefined)
+                            .map(m => ({
+                                id: m._id,
+                                latitude: m.current_latitude!,
+                                longitude: m.current_longitude!,
+                                title: `${t('moderator')}: ${m.full_name}`,
+                                description: t('group_leader')
+                            })) || []),
+                        ...suggestedAreas.map(a => ({
+                            id: `area-${a._id}`,
+                            latitude: a.latitude,
+                            longitude: a.longitude,
+                            title: `📍 ${a.name}`,
+                            description: a.description || t('suggested_areas'),
+                            pinColor: '#F59E0B'
+                        }))
+                    ]}
                 />
             </View>
 
@@ -478,6 +502,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                             </TouchableOpacity>
                         )}
 
+
                         {groupInfo && groupInfo.moderators.length > 0 && (
                             <TouchableOpacity
                                 style={[styles.callModButton, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
@@ -486,6 +511,29 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                                 <Ionicons name="call" size={16} color="white" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
                                 <Text style={styles.navigateModButtonText}>{t('call_moderator') || 'Call Moderator'}</Text>
                             </TouchableOpacity>
+                        )}
+
+                        {/* Suggested Areas Section */}
+                        {suggestedAreas.length > 0 && (
+                            <View style={styles.suggestedSection}>
+                                <Text style={[styles.suggestedTitle, { textAlign: isRTL ? 'right' : 'left' }]}>📍 {t('suggested_areas')}</Text>
+                                {suggestedAreas.map(area => (
+                                    <View key={area._id} style={[styles.suggestedRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                                        <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+                                            <Text style={styles.suggestedName}>{area.name}</Text>
+                                            {area.description ? <Text style={styles.suggestedDesc}>{area.description}</Text> : null}
+                                        </View>
+                                        <TouchableOpacity
+                                            style={[styles.navigateAreaBtn, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                                            onPress={() => openNavigation(area.latitude, area.longitude, area.name)}
+                                        >
+                                            <Ionicons name="navigate-outline" size={14} color="white" style={{ marginRight: isRTL ? 0 : 4, marginLeft: isRTL ? 4 : 0 }} />
+                                            <Text style={styles.navigateAreaText}>{t('navigate_to_area')}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+
                         )}
                     </View>
                 )}
@@ -732,5 +780,48 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 4,
+    },
+    suggestedSection: {
+        marginTop: 14,
+        borderTopWidth: 1,
+        borderTopColor: '#E2E8F0',
+        paddingTop: 12,
+    },
+    suggestedTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#334155',
+        marginBottom: 8,
+    },
+    suggestedRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    suggestedName: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#1E293B',
+    },
+    suggestedDesc: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    navigateAreaBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F59E0B',
+        borderRadius: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        marginLeft: 8,
+    },
+    navigateAreaText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '600',
     },
 });
