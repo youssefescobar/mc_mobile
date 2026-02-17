@@ -273,5 +273,18 @@
     "passport_label": "Passeport",
     "national_id_or_passport": "Carte d'identité nationale ou Passeport",
     "invalid_id": "Numéro d'identité invalide",
-    "invalid_passport": "Numéro de passeport invalide"
+    "invalid_passport": "Numéro de passeport invalide",
+    "suggested_areas": "Zones Suggérées",
+    "suggest_area": "Suggérer une Zone",
+    "area_name": "Nom de la zone",
+    "area_description": "Description (facultatif)",
+    "tap_map_to_pin": "Appuyez sur la carte pour définir l'emplacement",
+    "navigate_to_area": "Naviguer",
+    "area_added": "Zone ajoutée avec succès",
+    "area_deleted": "Zone supprimée",
+    "no_suggested_areas": "Aucune zone suggérée pour le moment",
+    "add_area": "Ajouter une zone",
+    "search_location": "Rechercher un lieu...",
+    "are_you_sure": "Êtes-vous sûr ?",
+    "delete_area": "Supprimer la zone"
 }

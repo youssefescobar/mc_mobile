@@ -273,5 +273,18 @@
     "passport_label": "Pasaport",
     "national_id_or_passport": "Ulusal Kimlik veya Pasaport",
     "invalid_id": "Geçersiz Kimlik Numarası",
-    "invalid_passport": "Geçersiz Pasaport Numarası"
+    "invalid_passport": "Geçersiz Pasaport Numarası",
+    "suggested_areas": "Önerilen Alanlar",
+    "suggest_area": "Alan Öner",
+    "area_name": "Alan Adı",
+    "area_description": "Açıklama (isteğe bağlı)",
+    "tap_map_to_pin": "Konumu ayarlamak için haritaya dokunun",
+    "navigate_to_area": "Yol Tarifi",
+    "area_added": "Alan başarıyla eklendi",
+    "area_deleted": "Alan kaldırıldı",
+    "no_suggested_areas": "Henüz önerilen alan yok",
+    "add_area": "Alan Ekle",
+    "search_location": "Konum ara...",
+    "are_you_sure": "Emin misiniz?",
+    "delete_area": "Alanı Kaldır"
 }
