@@ -5,7 +5,7 @@ import {
     KeyboardAvoidingView, Platform, Switch, RefreshControl, ActivityIndicator, Dimensions,
     ScrollView, Share, Linking, Animated as RNAnimated
 } from 'react-native';
-import MapView, { Marker, MapPressEvent } from 'react-native-maps';
+import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -920,6 +920,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                             <View style={styles.miniMapContainer}>
                                 <MapView
                                     ref={areaMapRef}
+                                    provider={PROVIDER_GOOGLE}
                                     style={styles.miniMap}
                                     initialRegion={{
                                         latitude: myLocation?.latitude || 21.4225,
