@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, TouchableWithoutFeedback } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
@@ -102,6 +102,7 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
 
     // Location Tracking
     const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
+    const lastLocationUpdate = useRef<number>(0);
 
     const setupLocationTracking = async () => {
         try {
@@ -120,7 +121,11 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                     distanceInterval: 50, // OR every 50 meters
                 },
                 async (location) => {
+                    const now = Date.now();
+                    if (now - lastLocationUpdate.current < 30000) return;
+
                     try {
+                        lastLocationUpdate.current = now;
                         const battery = await Battery.getBatteryLevelAsync();
                         await api.put('/auth/location', {
                             latitude: location.coords.latitude,
@@ -138,18 +143,22 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
         }
     };
 
+    // Initial Load
+    useEffect(() => {
+        fetchGroups();
+        fetchProfile();
+        setupLocationTracking();
+    }, []);
+
     // Refresh data when screen comes into focus
     useFocusEffect(
         useCallback(() => {
-            fetchGroups();
-            fetchProfile();
             fetchNotifications();
             fetchMissedCallCount();
-            setupLocationTracking(); // Start tracking
-            // const intervalId = setInterval(fetchNotifications, 15000); // Polling removed
-            return () => {
-                // clearInterval(intervalId);
-            };
+
+            // Optional: Refetch groups if it's been a while or force refresh needed
+            // For now, we rely on pull-to-refresh for groups to save bandwidth
+            // if (groups.length === 0) fetchGroups(); 
         }, [])
     );
 

@@ -187,10 +187,10 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     // Refresh data when screen comes into focus
     useFocusEffect(
         React.useCallback(() => {
-            fetchGroupInfo();
+            if (!groupInfo) fetchGroupInfo();
             fetchNotifications();
             fetchMissedCallCount();
-        }, [])
+        }, [groupInfo])
     );
 
     // Poll for unread messages when we have a group
@@ -261,13 +261,25 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         }
     };
 
+    const lastLocationUpdate = useRef<number>(0);
+
     const handleLocationUpdate = async (location: Location.LocationObject) => {
         if (!isSharingLocation) return;
 
+        const now = Date.now();
+        // Throttle updates to once every 30 seconds for API calls
+        // Socket updates can be more frequent if needed, but let's sync them for consistency/battery
+        const shouldUpdate = now - lastLocationUpdate.current > 30000;
+
+        if (!shouldUpdate) return;
+
         try {
+            lastLocationUpdate.current = now;
             const level = await Battery.getBatteryLevelAsync();
             const batteryPercent = Math.round(level * 100);
             setBatteryLevel(batteryPercent);
+
+            // Fire API call
             await api.put('/pilgrim/location', {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
@@ -280,7 +292,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                     pilgrimId: route.params.userId,
                     lat: location.coords.latitude,
                     lng: location.coords.longitude,
-                    isSos: sosActive // Pass SOS status
+                    isSos: sosActive
                 });
             }
         } catch (e) {
@@ -292,11 +304,14 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         if (!isSharingLocation) return;
         try {
             const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            // Force update for initial load or manual triggers
+            lastLocationUpdate.current = 0;
             handleLocationUpdate(location);
         } catch (e) {
             console.log('Error getting current location', e);
         }
     };
+
 
     const startRealTimeTracking = async () => {
         const { status } = await Location.requestForegroundPermissionsAsync();
