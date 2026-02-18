@@ -43,5 +43,8 @@ yarn-error.*
 /android
 
 google-services.json
-./app.json
+
 app.json
+
+.env
+
