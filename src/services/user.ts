@@ -7,3 +7,7 @@ export const getUserId = async (): Promise<string | null> => {
 export const getUserName = async (): Promise<string | null> => {
   return await AsyncStorage.getItem('full_name');
 };
+
+export const getUserRole = async (): Promise<string | null> => {
+  return await AsyncStorage.getItem('role');
+};

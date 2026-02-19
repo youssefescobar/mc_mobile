@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { BASE_URL } from './api';
-import { getUserId } from './user';
+import { getUserId, getUserRole } from './user';
 
 class SocketService {
     public socket: Socket | null = null;
@@ -66,10 +66,11 @@ class SocketService {
 
     async registerUser() {
         const userId = await getUserId();
-        console.log('[SocketService] Got userId for registration:', userId);
+        const role = await getUserRole();
+        console.log('[SocketService] Got userId/role for registration:', userId, role);
         if (userId) {
-            console.log('[SocketService] Emitting register-user event with userId:', userId);
-            this.socket?.emit('register-user', { userId });
+            console.log('[SocketService] Emitting register-user event with userId/role:', userId, role);
+            this.socket?.emit('register-user', { userId, role });
         } else {
             console.log('[SocketService] WARNING: No userId available for registration!');
         }
@@ -122,8 +123,21 @@ class SocketService {
     onLocationUpdate(callback: (data: any) => void) { this.on('location_update', callback); }
     offLocationUpdate(callback?: (data: any) => void) { this.off('location_update', callback); }
 
-    onSOSAlert(callback: (data: any) => void) { this.on('sos_alert', callback); }
-    offSOSAlert(callback?: (data: any) => void) { this.off('sos_alert', callback); }
+    onSOSAlert(callback: (data: any) => void) {
+        this.socket?.on('sos_alert', callback);
+    }
+
+    offSOSAlert(callback: (data: any) => void) {
+        this.socket?.off('sos_alert', callback);
+    }
+
+    onStatusUpdate(callback: (data: any) => void) {
+        this.socket?.on('status_update', callback);
+    }
+
+    offStatusUpdate(callback: (data: any) => void) {
+        this.socket?.off('status_update', callback);
+    }
 
     onNewMessage(callback: (data: any) => void) { this.on('new_message', callback); }
     offNewMessage(callback?: (data: any) => void) { this.off('new_message', callback); }

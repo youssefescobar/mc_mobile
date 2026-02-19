@@ -196,8 +196,19 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     // Poll for unread messages when we have a group
     useEffect(() => {
         if (!groupInfo) return;
-        socketService.joinGroup(groupInfo.group_id);
-        fetchUnreadCount(groupInfo.group_id);
+
+        const joinGroupValues = async () => {
+            // Ensure socket is connected before joining
+            if (!socketService.socket?.connected) {
+                await socketService.connect();
+                // Give it a moment to connect
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            socketService.joinGroup(groupInfo.group_id);
+            fetchUnreadCount(groupInfo.group_id);
+        };
+
+        joinGroupValues();
 
         const handleNewMessage = (msg: any) => {
             if (msg.group_id === groupInfo.group_id) {
@@ -211,9 +222,17 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
         socketService.onNewMessage(handleNewMessage);
 
+        // Also listen for reconnect to rejoin group
+        const handleReconnect = () => {
+            console.log('[PilgrimDashboard] Reconnected, re-joining group');
+            socketService.joinGroup(groupInfo.group_id);
+        };
+        socketService.socket?.on('reconnect', handleReconnect);
+
         return () => {
             socketService.offNewMessage(handleNewMessage);
             socketService.leaveGroup(groupInfo.group_id);
+            socketService.socket?.off('reconnect', handleReconnect);
         };
     }, [groupInfo]);
 
@@ -410,8 +429,8 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
 
             {/* Header overlay */}
-            <SafeAreaView style={styles.header} edges={['top']}>
-                <View style={[styles.headerContent, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <SafeAreaView style={styles.header} edges={['top']} pointerEvents="box-none">
+                <View style={[styles.headerContent, { flexDirection: 'column', alignItems: isRTL ? 'flex-end' : 'flex-start', gap: 12 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <TouchableOpacity
                             style={styles.profileButton}

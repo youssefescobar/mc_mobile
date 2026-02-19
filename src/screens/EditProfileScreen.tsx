@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator, ScrollView, Platform, Alert, KeyboardAvoidingView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Platform, KeyboardAvoidingView, Animated } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../navigation/types';
-import { api, BASE_URL } from '../services/api';
+import { api } from '../services/api';
 import { useToast } from '../components/ToastContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +19,6 @@ export default function EditProfileScreen({ navigation }: Props) {
     const [age, setAge] = useState('');
     const [gender, setGender] = useState('');
     const [medicalHistory, setMedicalHistory] = useState('');
-    const [profileImage, setProfileImage] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
     const [isPilgrim, setIsPilgrim] = useState(false);
@@ -53,29 +51,12 @@ export default function EditProfileScreen({ navigation }: Props) {
                     setGender(response.data.gender || '');
                     setMedicalHistory(response.data.medical_history || '');
                 }
-
-                if (response.data.profile_picture) {
-                    setProfileImage(`${BASE_URL.replace('/api', '')}/uploads/${response.data.profile_picture}`);
-                }
             }
         } catch (error) {
             console.error('Failed to fetch profile', error);
             showToast(t('failed_load_profile'), 'error');
         } finally {
             setInitialLoading(false);
-        }
-    };
-
-    const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.5,
-        });
-
-        if (!result.canceled) {
-            setProfileImage(result.assets[0].uri);
         }
     };
 
@@ -87,35 +68,19 @@ export default function EditProfileScreen({ navigation }: Props) {
 
         setLoading(true);
         try {
-            const formData = new FormData();
-            formData.append('full_name', name);
-            formData.append('phone_number', phone);
+            const payload: any = {
+                full_name: name,
+                phone_number: phone
+            };
 
             // Add pilgrim-specific fields if user is a pilgrim
             if (isPilgrim) {
-                if (age) formData.append('age', age);
-                if (gender) formData.append('gender', gender);
-                if (medicalHistory !== undefined) formData.append('medical_history', medicalHistory);
+                if (age) payload.age = age;
+                if (gender) payload.gender = gender;
+                if (medicalHistory !== undefined) payload.medical_history = medicalHistory;
             }
 
-            if (profileImage && !profileImage.startsWith('http')) {
-                // It's a new local image
-                const filename = profileImage.split('/').pop();
-                const match = /\.(\w+)$/.exec(filename || '');
-                const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-                formData.append('profile_picture', {
-                    uri: profileImage,
-                    name: filename || 'profile.jpg',
-                    type,
-                } as any);
-            }
-
-            await api.put('/auth/update-profile', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
+            await api.put('/auth/update-profile', payload);
 
             showToast(t('profile_updated_success'), 'success');
             navigation.goBack();
@@ -162,23 +127,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                     showsVerticalScrollIndicator={false}
                 >
                     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }] }}>
-                        <View style={styles.imageContainer}>
-                            <View style={styles.imageWrapper}>
-                                {profileImage ? (
-                                    <Image source={{ uri: profileImage }} style={styles.profileImage} />
-                                ) : (
-                                    <View style={[styles.profileImage, styles.placeholderImage]}>
-                                        <Text style={styles.placeholderText}>{name.charAt(0)}</Text>
-                                    </View>
-                                )}
-                                <TouchableOpacity style={styles.editIconBadge} onPress={pickImage}>
-                                    <Ionicons name="camera" size={16} color="#1F6FEB" />
-                                </TouchableOpacity>
-                            </View>
-                            <TouchableOpacity onPress={pickImage}>
-                                <Text style={styles.changePhotoText}>{t('change_profile_photo')}</Text>
-                            </TouchableOpacity>
-                        </View>
+                        {/* Profile Image UI Removed */}
 
                         <View style={styles.form}>
                             <Text style={styles.label}>{t('full_name')}</Text>

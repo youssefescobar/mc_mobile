@@ -313,17 +313,11 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                         )}
                     </TouchableOpacity>
 
-                    <TouchableOpacity onPress={() => setShowProfile(true)}>
-                        {profile?.profile_picture ? (
-                            <Image
-                                source={{ uri: `${BASE_URL.replace('/api', '')}/uploads/${profile.profile_picture}` }}
-                                style={{ width: 40, height: 40, borderRadius: 20 }}
-                            />
-                        ) : (
-                            <View style={styles.profileButton}>
-                                <Ionicons name="person-circle-outline" size={32} color="#666" />
-                            </View>
-                        )}
+                    <TouchableOpacity
+                        style={styles.profileButton}
+                        onPress={() => setShowProfile(true)}
+                    >
+                        <Ionicons name="person-circle-outline" size={32} color="#666" />
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
@@ -341,14 +335,7 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                             <View style={styles.profileCard}>
                                 <View style={styles.profileHeader}>
                                     <View style={styles.avatarLarge}>
-                                        {profile?.profile_picture ? (
-                                            <Image
-                                                source={{ uri: `${BASE_URL.replace('/api', '')}/uploads/${profile.profile_picture}` }}
-                                                style={{ width: 80, height: 80, borderRadius: 40 }}
-                                            />
-                                        ) : (
-                                            <Text style={styles.avatarText}>{profile?.full_name?.charAt(0) || 'M'}</Text>
-                                        )}
+                                        <Text style={styles.avatarText}>{profile?.full_name?.charAt(0) || 'M'}</Text>
                                     </View>
                                     <Text style={styles.profileName}>{profile?.full_name || t('moderator')}</Text>
                                     <Text style={styles.profileRole}>{t('verified_moderator')}</Text>

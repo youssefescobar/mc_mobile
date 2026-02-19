@@ -212,8 +212,25 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
             );
         };
 
+        const handleStatusUpdate = (data: any) => {
+            if (data.pilgrimId) {
+                setPilgrims(prev => prev.map(p =>
+                    p._id === data.pilgrimId ? {
+                        ...p,
+                        active: data.active,
+                        last_active_at: data.last_active_at
+                    } : p
+                ));
+                // Also update profile if open and matches
+                if (profilePilgrim && profilePilgrim._id === data.pilgrimId) {
+                    setProfilePilgrim(prev => prev ? { ...prev, active: data.active, last_active_at: data.last_active_at } : null);
+                }
+            }
+        };
+
         socketService.onLocationUpdate(handleLocationUpdate);
         socketService.onSOSAlert(handleSOS);
+        socketService.onStatusUpdate(handleStatusUpdate);
 
         return () => {
             // clearInterval(interval);
@@ -222,6 +239,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
             }
             socketService.offLocationUpdate(handleLocationUpdate);
             socketService.offSOSAlert(handleSOS);
+            socketService.offStatusUpdate(handleStatusUpdate);
         };
     }, [isFocused, groupId]);
 
@@ -371,8 +389,8 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         latitude: p.location!.lat,
         longitude: p.location!.lng,
         title: p.full_name,
-        description: `${t('battery')}: ${p.battery_percent || '?'}%`,
-        pinColor: (p as any).isSos ? 'red' : 'blue'
+        description: `${t('battery')}: ${p.battery_percent || '?'}% | ${p.active ? t('active') : (p.last_active_at ? new Date(p.last_active_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('offline'))}`,
+        pinColor: (p as any).isSos ? 'red' : (p.active ? 'green' : 'blue') // Green for active, Blue for offline
     }));
 
     const suggestedAreaMarkers = suggestedAreas.map(a => ({
@@ -536,12 +554,12 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                         <View style={[{ flex: 1 }, isRTL && { alignItems: 'flex-end' }]}>
                                             <Text style={styles.pilgrimName} numberOfLines={1}>{item.full_name}</Text>
                                             <Text style={styles.pilgrimId} numberOfLines={1}>{t('national_id')}: {item.national_id}</Text>
-                                            {item.location && (
-                                                <View style={[styles.statusIndicator, isRTL && { flexDirection: 'row-reverse' }]}>
-                                                    <View style={[styles.statusDot, { backgroundColor: '#10B981', [isRTL ? 'marginLeft' : 'marginRight']: 4 }]} />
-                                                    <Text style={styles.statusText}>{t('active')}</Text>
-                                                </View>
-                                            )}
+                                            <View style={[styles.statusIndicator, isRTL && { flexDirection: 'row-reverse' }]}>
+                                                <View style={[styles.statusDot, { backgroundColor: item.active ? '#10B981' : '#94A3B8', [isRTL ? 'marginLeft' : 'marginRight']: 4 }]} />
+                                                <Text style={[styles.statusText, !item.active && { color: '#94A3B8' }]}>
+                                                    {item.active ? t('active') : item.last_active_at ? new Date(item.last_active_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('offline')}
+                                                </Text>
+                                            </View>
                                         </View>
                                     </View>
                                     <View style={[styles.pilgrimActions, isRTL && { flexDirection: 'row-reverse' }]}>
@@ -647,6 +665,12 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                         <View style={[styles.profileRow, isRTL && { flexDirection: 'row-reverse' }]}>
                             <Text style={styles.profileLabel}>{t('national_id')}</Text>
                             <Text style={styles.profileValue}>{profilePilgrim?.national_id || '-'}</Text>
+                        </View>
+                        <View style={[styles.profileRow, isRTL && { flexDirection: 'row-reverse' }]}>
+                            <Text style={styles.profileLabel}>{t('status')}</Text>
+                            <Text style={[styles.profileValue, { color: profilePilgrim?.active ? '#10B981' : '#64748B' }]}>
+                                {profilePilgrim?.active ? t('active') : profilePilgrim?.last_active_at ? new Date(profilePilgrim.last_active_at).toLocaleString() : t('offline')}
+                            </Text>
                         </View>
                         <View style={[styles.profileRow, isRTL && { flexDirection: 'row-reverse' }]}>
                             <Text style={styles.profileLabel}>{t('email')}</Text>
@@ -1435,7 +1459,7 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        bottom: 32,
+        bottom: 80,
         right: 24,
         backgroundColor: '#2563EB',
         width: 56,
