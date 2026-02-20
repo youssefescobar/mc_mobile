@@ -164,7 +164,7 @@ export default function NotificationsScreen({ navigation }: Props) {
         const handlePress = () => {
             if (!isSos) return;
             const groupId = item.data?.group_id;
-            const groupName = item.data?.group_name || 'Group';
+            const groupName = item.data?.group_name || t('default_group_name');
             const pilgrimId = item.data?.pilgrim_id;
             if (groupId && pilgrimId) {
                 navigation.navigate('GroupDetails', {

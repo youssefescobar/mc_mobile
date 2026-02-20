@@ -543,7 +543,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                                 onPress={() => startCall(groupInfo.moderators[0]._id, groupInfo.moderators[0].full_name)}
                             >
                                 <Ionicons name="call" size={16} color="white" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
-                                <Text style={styles.navigateModButtonText}>{t('call_moderator') || 'Call Moderator'}</Text>
+                                <Text style={styles.navigateModButtonText}>{t('call_moderator')}</Text>
                             </TouchableOpacity>
                         )}
 

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../services/api';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import CallTypeModal from '../components/CallTypeModal';
 import { useCall } from '../context/CallContext';
 
@@ -28,6 +29,7 @@ interface CallRecord {
 export default function CallHistoryScreen() {
     const { startCall } = useCall();
     const navigation = useNavigation();
+    const { t } = useTranslation();
     const [calls, setCalls] = useState<CallRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -99,9 +101,9 @@ export default function CallHistoryScreen() {
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
 
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
+        if (diffMins < 60) return `${diffMins}${t('time_ago_m')}`;
+        if (diffHours < 24) return `${diffHours}${t('time_ago_h')}`;
+        if (diffDays < 7) return `${diffDays}${t('time_ago_d')}`;
         return date.toLocaleDateString();
     };
 
@@ -120,7 +122,7 @@ export default function CallHistoryScreen() {
         const otherPerson = isOutgoing ? item.receiver_id : item.caller_id;
         const { iconName, color } = getCallIcon(item);
 
-        const displayName = otherPerson?.full_name || 'Unknown User';
+        const displayName = otherPerson?.full_name || t('unknown_user');
         const isMissed = item.status === 'missed' && !isOutgoing;
 
         return (
@@ -132,7 +134,7 @@ export default function CallHistoryScreen() {
                     <Text style={styles.name}>{displayName}</Text>
                     <View style={styles.detailsRow}>
                         <Text style={styles.callType}>
-                            {item.call_type === 'internet' ? 'Internet' : 'Phone'} • {isOutgoing ? 'Outgoing' : 'Incoming'}
+                            {item.call_type === 'internet' ? t('call_type_internet') : t('call_type_phone')} • {isOutgoing ? t('call_direction_outgoing') : t('call_direction_incoming')}
                         </Text>
                         {item.duration > 0 && (
                             <Text style={styles.duration}> • {formatDuration(item.duration)}</Text>
@@ -147,7 +149,7 @@ export default function CallHistoryScreen() {
                             onPress={() => handleCallPress({ id: otherPerson._id, name: displayName })}
                         >
                             <Ionicons name="call" size={16} color="white" />
-                            <Text style={styles.callBackText}>Call Back</Text>
+                            <Text style={styles.callBackText}>{t('call_back')}</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -168,8 +170,8 @@ export default function CallHistoryScreen() {
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
                         <Ionicons name="call-outline" size={64} color="#BDBDBD" />
-                        <Text style={styles.emptyText}>No call history</Text>
-                        <Text style={styles.emptySubtext}>Your calls will appear here</Text>
+                        <Text style={styles.emptyText}>{t('no_call_history')}</Text>
+                        <Text style={styles.emptySubtext}>{t('no_call_history_sub')}</Text>
                     </View>
                 }
             />

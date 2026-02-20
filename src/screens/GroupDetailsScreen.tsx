@@ -389,8 +389,8 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         latitude: p.location!.lat,
         longitude: p.location!.lng,
         title: p.full_name,
-        description: `${t('battery')}: ${p.battery_percent || '?'}% | ${p.active ? t('active') : (p.last_active_at ? new Date(p.last_active_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('offline'))}`,
-        pinColor: (p as any).isSos ? 'red' : (p.active ? 'green' : 'blue') // Green for active, Blue for offline
+        description: `${t('battery')}: ${p.battery_percent || '?'}% | ${p.active ? t('active') : (p.last_active_at ? `${t('last_active_at')} ${new Date(p.last_active_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}` : t('offline'))}`,
+        pinColor: (p as any).isSos ? 'red' : (p.active ? 'green' : 'gray') // Green for active, Gray for offline
     }));
 
     const suggestedAreaMarkers = suggestedAreas.map(a => ({
@@ -437,7 +437,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 }}
             >
                 <Ionicons name="trash" size={22} color="white" />
-                <Text style={styles.swipeDeleteText}>Remove</Text>
+                <Text style={styles.swipeDeleteText}>{t('remove')}</Text>
             </TouchableOpacity>
         );
     }, []);
@@ -473,7 +473,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 <View style={[styles.navToggleRow, isRTL && { flexDirection: 'row-reverse' }]}>
                     <View style={[{ flexDirection: 'row', alignItems: 'center' }, isRTL && { flexDirection: 'row-reverse' }]}>
                         <Ionicons name="navigate-outline" size={16} color="#475569" style={{ [isRTL ? 'marginLeft' : 'marginRight']: 6 }} />
-                        <Text style={styles.navToggleLabel}>Allow pilgrims to navigate to you</Text>
+                        <Text style={styles.navToggleLabel}>{t('allow_pilgrim_nav_label')}</Text>
                     </View>
                     <Switch
                         value={allowPilgrimNav}
@@ -557,7 +557,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                             <View style={[styles.statusIndicator, isRTL && { flexDirection: 'row-reverse' }]}>
                                                 <View style={[styles.statusDot, { backgroundColor: item.active ? '#10B981' : '#94A3B8', [isRTL ? 'marginLeft' : 'marginRight']: 4 }]} />
                                                 <Text style={[styles.statusText, !item.active && { color: '#94A3B8' }]}>
-                                                    {item.active ? t('active') : item.last_active_at ? new Date(item.last_active_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('offline')}
+                                                    {item.active ? t('active') : item.last_active_at ? `${t('last_active_at')} ${new Date(item.last_active_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}` : t('offline')}
                                                 </Text>
                                             </View>
                                         </View>
@@ -591,7 +591,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                                     <Ionicons name="people-outline" size={40} color="#94A3B8" />
                                 </View>
                                 <Text style={styles.emptyTitle}>{t('no_pilgrims_group')}</Text>
-                                <Text style={styles.emptySubtitle}>{t('add_pilgrims_hint') || 'Tap the + button below to add pilgrims'}</Text>
+                                <Text style={styles.emptySubtitle}>{t('add_pilgrims_hint')}</Text>
                             </View>
                         }
                         ListFooterComponent={<View style={{ height: 20 }} />}
@@ -669,7 +669,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                         <View style={[styles.profileRow, isRTL && { flexDirection: 'row-reverse' }]}>
                             <Text style={styles.profileLabel}>{t('status')}</Text>
                             <Text style={[styles.profileValue, { color: profilePilgrim?.active ? '#10B981' : '#64748B' }]}>
-                                {profilePilgrim?.active ? t('active') : profilePilgrim?.last_active_at ? new Date(profilePilgrim.last_active_at).toLocaleString() : t('offline')}
+                                {profilePilgrim?.active ? t('active') : profilePilgrim?.last_active_at ? `${t('last_active_at')} ${new Date(profilePilgrim.last_active_at).toLocaleString([], { hour12: true })}` : t('offline')}
                             </Text>
                         </View>
                         <View style={[styles.profileRow, isRTL && { flexDirection: 'row-reverse' }]}>

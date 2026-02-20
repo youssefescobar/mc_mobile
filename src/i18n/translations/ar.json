@@ -298,5 +298,21 @@
     "add_area": "إضافة منطقة",
     "search_location": "ابحث عن موقع...",
     "are_you_sure": "هل أنت متأكد؟",
-    "delete_area": "إزالة المنطقة"
+    "delete_area": "إزالة المنطقة",
+    "last_active_at": "آخر نشاط في",
+    "add_pilgrims_hint": "اضغط على زر + أدناه لإضافة حجاج",
+    "allow_pilgrim_nav_label": "السماح للحجاج بالتوجه إليك",
+    "no_location_data": "لا توجد بيانات للموقع",
+    "unknown_user": "مستخدم غير معروف",
+    "call_type_internet": "انترنت",
+    "call_type_phone": "هاتف",
+    "call_direction_outgoing": "صادر",
+    "call_direction_incoming": "وارد",
+    "call_back": "إعادة الاتصال",
+    "no_call_history": "لا يوجد سجل مكالمات",
+    "no_call_history_sub": "ستظهر مكالماتك هنا",
+    "time_ago_m": "د",
+    "time_ago_h": "س",
+    "time_ago_d": "ي",
+    "default_group_name": "مجموعة"
 }

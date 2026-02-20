@@ -298,5 +298,21 @@
     "add_area": "Add Area",
     "search_location": "Search location...",
     "are_you_sure": "Are you sure?",
-    "delete_area": "Remove Area"
+    "delete_area": "Remove Area",
+    "last_active_at": "Last active at",
+    "add_pilgrims_hint": "Tap the + button below to add pilgrims",
+    "allow_pilgrim_nav_label": "Allow pilgrims to navigate to you",
+    "no_location_data": "No location data available",
+    "unknown_user": "Unknown User",
+    "call_type_internet": "Internet",
+    "call_type_phone": "Phone",
+    "call_direction_outgoing": "Outgoing",
+    "call_direction_incoming": "Incoming",
+    "call_back": "Call Back",
+    "no_call_history": "No call history",
+    "no_call_history_sub": "Your calls will appear here",
+    "time_ago_m": "m ago",
+    "time_ago_h": "h ago",
+    "time_ago_d": "d ago",
+    "default_group_name": "Group"
 }
