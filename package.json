@@ -34,6 +34,7 @@
     "expo-speech": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-task-manager": "^14.0.9",
+    "expo-updates": "~29.0.16",
     "google-libphonenumber": "^3.2.44",
     "i18next": "^25.8.4",
     "react": "19.1.0",

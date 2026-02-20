@@ -224,32 +224,36 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
         );
     };
 
-    const renderPickerModal = () => (
-        <Modal visible={showLangPicker} transparent animationType="slide">
-            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowLangPicker(false)}>
-                <View style={styles.modalContent}>
-                    <View style={[styles.modalHeader, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
-                        <Text style={styles.modalTitle}>{t('select_option')}</Text>
-                        <TouchableOpacity onPress={() => setShowLangPicker(false)}>
-                            <Ionicons name="close" size={24} color="#333" />
-                        </TouchableOpacity>
-                    </View>
-                    <FlatList
-                        data={LANGUAGES}
-                        keyExtractor={(item) => item.value}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity style={[styles.pickerItem, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]} onPress={() => handleLanguageChange(item)}>
-                                <Text style={styles.pickerItemText}>{item.flag}  {item.label}</Text>
-                                {selectedLanguage.value === item.value && (
-                                    <Ionicons name="checkmark" size={20} color="#007AFF" />
-                                )}
+    const renderPickerModal = () => {
+        if (!showLangPicker) return null;
+
+        return (
+            <Modal visible={true} transparent animationType="slide">
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowLangPicker(false)}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>{t('select_option')}</Text>
+                            <TouchableOpacity onPress={() => setShowLangPicker(false)}>
+                                <Ionicons name="close" size={24} color="#333" />
                             </TouchableOpacity>
-                        )}
-                    />
-                </View>
-            </TouchableOpacity>
-        </Modal>
-    );
+                        </View>
+                        <FlatList
+                            data={LANGUAGES}
+                            keyExtractor={(item) => item.value}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity style={[styles.pickerItem, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]} onPress={() => handleLanguageChange(item)}>
+                                    <Text style={styles.pickerItemText}>{item.flag}  {item.label}</Text>
+                                    {selectedLanguage.value === item.value && (
+                                        <Ionicons name="checkmark" size={20} color="#007AFF" />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+        );
+    };
 
     if (loading) {
         return (
@@ -263,7 +267,7 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.backgroundOrbOne} />
             <View style={styles.backgroundOrbTwo} />
-            <View style={[styles.header, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
+            <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name={i18n.language === 'ar' || i18n.language === 'ur' ? "arrow-forward" : "arrow-back"} size={28} color="#1F2A44" />
                 </TouchableOpacity>
@@ -284,16 +288,16 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                     </View>
 
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right', marginLeft: 0, marginRight: 6 }]}>{t('personal_information')}</Text>
+                        <Text style={styles.sectionTitle}>{t('personal_information')}</Text>
                         <View style={styles.card}>
-                            <InfoRow label={t('phone_number')} value={profile?.phone_number} isRTL={i18n.language === 'ar' || i18n.language === 'ur'} />
-                            <InfoRow label={t('national_id')} value={profile?.national_id || t('not_available_short')} isRTL={i18n.language === 'ar' || i18n.language === 'ur'} />
-                            <InfoRow label={t('age')} value={profile?.age?.toString()} isRTL={i18n.language === 'ar' || i18n.language === 'ur'} />
-                            <InfoRow label={t('gender')} value={profile?.gender ? t(profile.gender.toLowerCase()) : undefined} isRTL={i18n.language === 'ar' || i18n.language === 'ur'} />
+                            <InfoRow label={t('phone_number')} value={profile?.phone_number} />
+                            <InfoRow label={t('national_id')} value={profile?.national_id || t('not_available_short')} />
+                            <InfoRow label={t('age')} value={profile?.age?.toString()} />
+                            <InfoRow label={t('gender')} value={profile?.gender ? t(profile.gender.toLowerCase()) : undefined} />
 
                             {/* Email Section */}
-                            <View style={[styles.emailRow, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
-                                <View style={[styles.emailTextWrap, (i18n.language === 'ar' || i18n.language === 'ur') && { marginRight: 0, marginLeft: 10, alignItems: 'flex-end' }]}>
+                            <View style={styles.emailRow}>
+                                <View style={styles.emailTextWrap}>
                                     <Text style={styles.label}>{t('email')}</Text>
                                     <Text style={styles.value}>{profile?.email || t('not_set')}</Text>
                                 </View>
@@ -310,9 +314,9 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
 
                             {/* Email Input for update */}
                             {showEmailInput && !profile?.email_verified && (
-                                <View style={[styles.emailInputContainer, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
+                                <View style={styles.emailInputContainer}>
                                     <TextInput
-                                        style={[styles.emailInput, (i18n.language === 'ar' || i18n.language === 'ur') && { marginRight: 0, marginLeft: 10, textAlign: 'right' }]}
+                                        style={styles.emailInput}
                                         placeholder={t('enter_your_email')}
                                         value={newEmail}
                                         onChangeText={setNewEmail}
@@ -330,10 +334,10 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                             )}
 
                             {/* Language Switcher Row */}
-                            <TouchableOpacity style={[styles.infoRow, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]} onPress={() => setShowLangPicker(true)}>
+                            <TouchableOpacity style={styles.infoRow} onPress={() => setShowLangPicker(true)}>
                                 <Text style={styles.label}>{t('language')}</Text>
-                                <View style={{ flexDirection: (i18n.language === 'ar' || i18n.language === 'ur') ? 'row-reverse' : 'row', alignItems: 'center' }}>
-                                    <Text style={[styles.value, (i18n.language === 'ar' || i18n.language === 'ur') ? { marginLeft: 8 } : { marginRight: 8 }]}>{selectedLanguage.flag} {selectedLanguage.label}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={styles.value}>{selectedLanguage.flag} {selectedLanguage.label}</Text>
                                     <Ionicons name="chevron-down" size={16} color="#6B7280" />
                                 </View>
                             </TouchableOpacity>
@@ -342,9 +346,9 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                     </View>
 
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right', marginLeft: 0, marginRight: 6 }]}>{t('medical_information')}</Text>
+                        <Text style={styles.sectionTitle}>{t('medical_information')}</Text>
                         <View style={styles.card}>
-                            <Text style={[styles.medicalText, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>
+                            <Text style={styles.medicalText}>
                                 {profile?.medical_history || t('no_medical_history_recorded')}
                             </Text>
                         </View>
@@ -372,7 +376,7 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
 }
 
 const InfoRow = ({ label, value, last, isRTL }: { label: string, value?: string, last?: boolean, isRTL?: boolean }) => (
-    <View style={[styles.infoRow, last && styles.noBorder, isRTL && { flexDirection: 'row-reverse' }]}>
+    <View style={[styles.infoRow, last && styles.noBorder]}>
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.value}>{value || '-'}</Text>
     </View>

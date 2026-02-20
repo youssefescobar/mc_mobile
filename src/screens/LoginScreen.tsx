@@ -21,15 +21,18 @@ export default function LoginScreen({ navigation }: Props) {
     const { showToast } = useToast();
 
     const handleLogin = async () => {
-        if (!identifier || !password) {
+        const cleanIdentifier = identifier.trim();
+        const cleanPassword = password.trim(); // Optional trim, might want to be careful with spaces in passwords, but since user specifically asked for trimming, we will trim it.
+
+        if (!cleanIdentifier || !cleanPassword) {
             showToast(t('fill_required'), 'error', { title: t('missing_fields') });
             return;
         }
 
         setLoading(true);
         try {
-            console.log('Attempting login with:', identifier);
-            const response = await api.post('/auth/login', { identifier, password });
+            console.log('Attempting login with:', cleanIdentifier);
+            const response = await api.post('/auth/login', { identifier: cleanIdentifier, password: cleanPassword });
 
             const { token, role, user_id, full_name } = response.data;
 
@@ -94,7 +97,7 @@ export default function LoginScreen({ navigation }: Props) {
                                 <View style={styles.inputWrapper}>
                                     <Text style={styles.label}>{t('email_placeholder')}</Text>
                                     <TextInput
-                                        style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
+                                        style={styles.input}
                                         placeholder={t('email_placeholder')}
                                         placeholderTextColor="#999"
                                         value={identifier}
@@ -106,7 +109,7 @@ export default function LoginScreen({ navigation }: Props) {
                                 <View style={styles.inputWrapper}>
                                     <Text style={styles.label}>{t('password_placeholder')}</Text>
                                     <TextInput
-                                        style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
+                                        style={styles.input}
                                         placeholder="••••••••"
                                         placeholderTextColor="#999"
                                         value={password}
@@ -130,10 +133,10 @@ export default function LoginScreen({ navigation }: Props) {
                                 </View>
 
                                 <TouchableOpacity
-                                    style={[styles.googleButton, i18n.language === 'ar' || i18n.language === 'ur' ? { flexDirection: 'row-reverse' } : null]}
+                                    style={styles.googleButton}
                                     onPress={() => showToast(t('google_signin_coming_soon'), 'info', { title: t('coming_soon') })}
                                 >
-                                    <Text style={[styles.googleButtonText, i18n.language === 'ar' || i18n.language === 'ur' ? { marginRight: 0, marginLeft: 10 } : null]}>G</Text>
+                                    <Text style={[styles.googleButtonText, { marginRight: 10 }]}>G</Text>
                                     <Text style={styles.googleText}>{t('sign_in_google')}</Text>
                                 </TouchableOpacity>
 

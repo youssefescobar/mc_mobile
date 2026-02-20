@@ -100,23 +100,30 @@ export default function SignUpScreen({ navigation }: Props) {
 
         let isValid = true;
 
-        if (!fullName) {
+        const cleanFullName = fullName.trim();
+        const cleanPassportNumber = passportNumber.trim();
+        const cleanPhoneNumber = phoneNumber.trim();
+        const cleanPassword = password.trim();
+        const cleanEmail = email.trim();
+        const cleanMedicalHistory = medicalHistory.trim();
+
+        if (!cleanFullName) {
             setNameError(true);
             isValid = false;
         }
 
         // Validate Passport
-        if (!passportNumber) {
+        if (!cleanPassportNumber) {
             setPassportError(true);
             isValid = false;
         } else {
-            if (!isValidPassport(passportNumber)) {
+            if (!isValidPassport(cleanPassportNumber)) {
                 setPassportError(true);
                 isValid = false;
             }
         }
 
-        if (!password) {
+        if (!cleanPassword) {
             setPasswordError(true);
             isValid = false;
         }
@@ -128,7 +135,7 @@ export default function SignUpScreen({ navigation }: Props) {
         }
 
         // Validate Phone Number
-        if (!validatePhoneNumber(phoneNumber, selectedCountryCode.region)) {
+        if (!validatePhoneNumber(cleanPhoneNumber, selectedCountryCode.region)) {
             setPhoneError(true);
             isValid = false;
         }
@@ -142,16 +149,16 @@ export default function SignUpScreen({ navigation }: Props) {
 
         setLoading(true);
         try {
-            const fullPhoneNumber = `${selectedCountryCode.code}${phoneNumber}`;
+            const fullPhoneNumber = `${selectedCountryCode.code}${cleanPhoneNumber}`;
             console.log('Registering pilgrim:', passportNumber, fullPhoneNumber);
 
             const response = await api.post('/auth/register', {
-                full_name: fullName,
-                national_id: passportNumber, // Backend expects national_id but we send passport number
+                full_name: cleanFullName,
+                national_id: cleanPassportNumber, // Backend expects national_id but we send passport number
                 phone_number: fullPhoneNumber,
-                password,
-                email: email.trim() || undefined,
-                medical_history: medicalHistory.trim() || undefined,
+                password: cleanPassword,
+                email: cleanEmail || undefined,
+                medical_history: cleanMedicalHistory || undefined,
                 language: selectedLanguage.value
             });
 
@@ -200,7 +207,7 @@ export default function SignUpScreen({ navigation }: Props) {
             <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
                 <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
                     <View style={[styles.modalContent, { height: '80%', maxHeight: '80%' }]}>
-                        <View style={[styles.modalHeader, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
+                        <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>{t('select_option')}</Text>
                             <TouchableOpacity onPress={onClose}>
                                 <Ionicons name="close" size={24} color="#333" />
@@ -211,7 +218,7 @@ export default function SignUpScreen({ navigation }: Props) {
                             <View style={styles.searchContainer}>
                                 <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
                                 <TextInput
-                                    style={[styles.searchInput, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}
+                                    style={styles.searchInput}
                                     placeholder={t('search') || "Search"}
                                     placeholderTextColor="#999"
                                     value={searchText}
@@ -224,7 +231,7 @@ export default function SignUpScreen({ navigation }: Props) {
                             data={filteredData}
                             keyExtractor={(item, index) => index.toString()}
                             renderItem={({ item }) => (
-                                <TouchableOpacity style={[styles.pickerItem, (i18n.language === 'ar' || i18n.language === 'ur') && { alignItems: 'flex-end' }]} onPress={() => { onSelect(item); setSearchText(''); onClose(); }}>
+                                <TouchableOpacity style={styles.pickerItem} onPress={() => { onSelect(item); setSearchText(''); onClose(); }}>
                                     {renderItem(item)}
                                 </TouchableOpacity>
                             )}
@@ -257,19 +264,18 @@ export default function SignUpScreen({ navigation }: Props) {
                     <View style={styles.formContainer}>
                         {/* Language Selector */}
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('language_preference')}</Text>
-                            <TouchableOpacity style={[styles.pickerButton, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]} onPress={() => setShowLangPicker(true)}>
+                            <Text style={styles.label}>{t('language_preference')}</Text>
+                            <TouchableOpacity style={styles.pickerButton} onPress={() => setShowLangPicker(true)}>
                                 <Text style={styles.pickerButtonText}>{selectedLanguage.flag}  {selectedLanguage.label}</Text>
                                 <Ionicons name="chevron-down" size={20} color="#666" />
                             </TouchableOpacity>
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('full_name')} *</Text>
+                            <Text style={styles.label}>{t('full_name')} *</Text>
                             <TextInput
                                 style={[
                                     styles.input,
-                                    { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' },
                                     nameError && { borderColor: '#EF4444', borderWidth: 1.5 }
                                 ]}
                                 placeholder={t('full_name')}
@@ -283,12 +289,11 @@ export default function SignUpScreen({ navigation }: Props) {
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('passport_label')} *</Text>
+                            <Text style={styles.label}>{t('passport_label')} *</Text>
 
                             <TextInput
                                 style={[
                                     styles.input,
-                                    { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' },
                                     passportError && { borderColor: '#EF4444', borderWidth: 1.5 }
                                 ]}
                                 placeholder={t('passport_label')}
@@ -302,16 +307,16 @@ export default function SignUpScreen({ navigation }: Props) {
                                 maxLength={20}
                             />
                             {passportError && (
-                                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginLeft: 4, textAlign: (i18n.language === 'ar' || i18n.language === 'ur') ? 'right' : 'left' }}>
+                                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginLeft: 4, textAlign: 'left' }}>
                                     {t('invalid_passport')}
                                 </Text>
                             )}
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('phone_number')} *</Text>
-                            <View style={[styles.phoneInputContainer, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
-                                <TouchableOpacity style={[styles.countryCodeButton, (i18n.language === 'ar' || i18n.language === 'ur') && { marginRight: 0, marginLeft: 10, flexDirection: 'row-reverse' }]} onPress={() => setShowCountryPicker(true)}>
+                            <Text style={styles.label}>{t('phone_number')} *</Text>
+                            <View style={styles.phoneInputContainer}>
+                                <TouchableOpacity style={styles.countryCodeButton} onPress={() => setShowCountryPicker(true)}>
                                     <Text style={styles.countryCodeText}>{selectedCountryCode.code}</Text>
                                     <Ionicons name="chevron-down" size={16} color="#666" />
                                 </TouchableOpacity>
@@ -332,18 +337,17 @@ export default function SignUpScreen({ navigation }: Props) {
                                 />
                             </View>
                             {phoneError && (
-                                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginLeft: 4, textAlign: (i18n.language === 'ar' || i18n.language === 'ur') ? 'right' : 'left' }}>
+                                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginLeft: 4, textAlign: 'left' }}>
                                     {t('invalid_phone_number')}
                                 </Text>
                             )}
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('password_placeholder')} *</Text>
+                            <Text style={styles.label}>{t('password_placeholder')} *</Text>
                             <TextInput
                                 style={[
                                     styles.input,
-                                    { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' },
                                     passwordError && { borderColor: '#EF4444', borderWidth: 1.5 }
                                 ]}
                                 placeholder={t('password_placeholder')}
@@ -358,9 +362,9 @@ export default function SignUpScreen({ navigation }: Props) {
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('email_optional')}</Text>
+                            <Text style={styles.label}>{t('email_optional')}</Text>
                             <TextInput
-                                style={[styles.input, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
+                                style={styles.input}
                                 placeholder={t('email_address_placeholder')}
                                 placeholderTextColor="#999"
                                 value={email}
@@ -371,9 +375,9 @@ export default function SignUpScreen({ navigation }: Props) {
                         </View>
 
                         <View style={styles.inputWrapper}>
-                            <Text style={[styles.label, (i18n.language === 'ar' || i18n.language === 'ur') && { textAlign: 'right' }]}>{t('medical_history')}</Text>
+                            <Text style={styles.label}>{t('medical_history')}</Text>
                             <TextInput
-                                style={[styles.input, styles.textArea, { textAlign: i18n.language === 'ar' || i18n.language === 'ur' ? 'right' : 'left' }]}
+                                style={[styles.input, styles.textArea]}
                                 placeholder={t('medical_history')}
                                 placeholderTextColor="#999"
                                 value={medicalHistory}
@@ -391,7 +395,7 @@ export default function SignUpScreen({ navigation }: Props) {
                             <Text style={styles.buttonText}>{loading ? t('registering') : t('sign_up')}</Text>
                         </TouchableOpacity>
 
-                        <View style={[styles.footer, (i18n.language === 'ar' || i18n.language === 'ur') && { flexDirection: 'row-reverse' }]}>
+                        <View style={styles.footer}>
                             <Text style={styles.footerText}>{t('already_have_account')} </Text>
                             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
                                 <Text style={styles.linkText}>{t('login')}</Text>
@@ -408,8 +412,8 @@ export default function SignUpScreen({ navigation }: Props) {
 
             {/* Country Code Picker Modal */}
             {renderPickerModal(showCountryPicker, () => setShowCountryPicker(false), COUNTRY_CODES, setSelectedCountryCode, (item) => (
-                <View style={{ flexDirection: (i18n.language === 'ar' || i18n.language === 'ur') ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                    <View style={{ flexDirection: (i18n.language === 'ar' || i18n.language === 'ur') ? 'row-reverse' : 'row', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={styles.pickerItemText}>{item.flag}</Text>
                         <Text style={[styles.pickerItemText, { marginHorizontal: 10 }]}>{item.code}</Text>
                     </View>

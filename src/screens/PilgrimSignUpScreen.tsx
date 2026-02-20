@@ -15,7 +15,6 @@ type PilgrimSignUpScreenNavigationProp = NativeStackNavigationProp<RootStackPara
 export default function PilgrimSignUpScreen() {
     const navigation = useNavigation<PilgrimSignUpScreenNavigationProp>();
     const { t, i18n } = useTranslation();
-    const isRTL = i18n.language === 'ar' || i18n.language === 'ur';
     const { showToast } = useToast();
 
     const [fullName, setFullName] = useState('');
@@ -27,17 +26,23 @@ export default function PilgrimSignUpScreen() {
     const [showPassword, setShowPassword] = useState(false);
 
     const handleRegister = async () => {
-        if (!fullName || !nationalId || !phoneNumber || !password || !confirmPassword) {
+        const cleanFullName = fullName.trim();
+        const cleanNationalId = nationalId.trim();
+        const cleanPhoneNumber = phoneNumber.trim();
+        const cleanPassword = password.trim();
+        const cleanConfirmPassword = confirmPassword.trim();
+
+        if (!cleanFullName || !cleanNationalId || !cleanPhoneNumber || !cleanPassword || !cleanConfirmPassword) {
             showToast(t('please_fill_all_fields'), 'error');
             return;
         }
 
-        if (password !== confirmPassword) {
+        if (cleanPassword !== cleanConfirmPassword) {
             showToast(t('passwords_dont_match'), 'error');
             return;
         }
 
-        if (password.length < 6) {
+        if (cleanPassword.length < 6) {
             showToast(t('password_too_short'), 'error');
             return;
         }
@@ -45,10 +50,10 @@ export default function PilgrimSignUpScreen() {
         setLoading(true);
         try {
             const response = await api.post('/auth/register', {
-                full_name: fullName,
-                national_id: nationalId,
-                phone_number: phoneNumber,
-                password
+                full_name: cleanFullName,
+                national_id: cleanNationalId,
+                phone_number: cleanPhoneNumber,
+                password: cleanPassword
             });
 
             const { token: jwtToken, role, full_name, user_id } = response.data;
@@ -88,10 +93,10 @@ export default function PilgrimSignUpScreen() {
                 </View>
 
                 <View style={styles.form}>
-                    <View style={[styles.inputContainer, isRTL && { flexDirection: 'row-reverse' }]}>
-                        <Ionicons name="person-outline" size={20} color="#666" style={[styles.inputIcon, isRTL && { marginRight: 0, marginLeft: 12 }]} />
+                    <View style={styles.inputContainer}>
+                        <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
                         <TextInput
-                            style={[styles.input, isRTL && { textAlign: 'right' }]}
+                            style={styles.input}
                             placeholder={t('full_name')}
                             value={fullName}
                             onChangeText={setFullName}
@@ -99,10 +104,10 @@ export default function PilgrimSignUpScreen() {
                         />
                     </View>
 
-                    <View style={[styles.inputContainer, isRTL && { flexDirection: 'row-reverse' }]}>
-                        <Ionicons name="card-outline" size={20} color="#666" style={[styles.inputIcon, isRTL && { marginRight: 0, marginLeft: 12 }]} />
+                    <View style={styles.inputContainer}>
+                        <Ionicons name="card-outline" size={20} color="#666" style={styles.inputIcon} />
                         <TextInput
-                            style={[styles.input, isRTL && { textAlign: 'right' }]}
+                            style={styles.input}
                             placeholder={t('national_id_passport_placeholder')}
                             value={nationalId}
                             onChangeText={setNationalId}
@@ -110,10 +115,10 @@ export default function PilgrimSignUpScreen() {
                         />
                     </View>
 
-                    <View style={[styles.inputContainer, isRTL && { flexDirection: 'row-reverse' }]}>
-                        <Ionicons name="call-outline" size={20} color="#666" style={[styles.inputIcon, isRTL && { marginRight: 0, marginLeft: 12 }]} />
+                    <View style={styles.inputContainer}>
+                        <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
                         <TextInput
-                            style={[styles.input, isRTL && { textAlign: 'right' }]}
+                            style={styles.input}
                             placeholder={t('mobile_number_placeholder')}
                             value={phoneNumber}
                             onChangeText={setPhoneNumber}
@@ -121,10 +126,10 @@ export default function PilgrimSignUpScreen() {
                         />
                     </View>
 
-                    <View style={[styles.inputContainer, isRTL && { flexDirection: 'row-reverse' }]}>
-                        <Ionicons name="lock-closed-outline" size={20} color="#666" style={[styles.inputIcon, isRTL && { marginRight: 0, marginLeft: 12 }]} />
+                    <View style={styles.inputContainer}>
+                        <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
                         <TextInput
-                            style={[styles.input, isRTL && { textAlign: 'right' }]}
+                            style={styles.input}
                             placeholder={t('password_placeholder')}
                             value={password}
                             onChangeText={setPassword}
@@ -135,10 +140,10 @@ export default function PilgrimSignUpScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <View style={[styles.inputContainer, isRTL && { flexDirection: 'row-reverse' }]}>
-                        <Ionicons name="lock-closed-outline" size={20} color="#666" style={[styles.inputIcon, isRTL && { marginRight: 0, marginLeft: 12 }]} />
+                    <View style={styles.inputContainer}>
+                        <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
                         <TextInput
-                            style={[styles.input, isRTL && { textAlign: 'right' }]}
+                            style={styles.input}
                             placeholder={t('confirm_password_placeholder')}
                             value={confirmPassword}
                             onChangeText={setConfirmPassword}
@@ -159,7 +164,7 @@ export default function PilgrimSignUpScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ alignItems: 'center', marginTop: 20 }}>
-                        <Text style={{ color: '#666', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                        <Text style={{ color: '#666' }}>
                             {t('already_have_account')} <Text style={{ color: '#2563eb', fontWeight: 'bold' }}>{t('login')}</Text>
                         </Text>
                     </TouchableOpacity>

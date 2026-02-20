@@ -2,6 +2,20 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { I18nManager, NativeModules } from 'react-native';
+import * as Updates from 'expo-updates';
+
+const reloadApp = async () => {
+    if (__DEV__) {
+        NativeModules.DevSettings.reload();
+    } else {
+        try {
+            await Updates.reloadAsync();
+        } catch (e) {
+            console.error('Failed to reload app for RTL changes', e);
+        }
+    }
+};
 
 // Import translation files
 import en from './translations/en.json';
@@ -31,6 +45,15 @@ const initI18n = async () => {
         savedLanguage = deviceLanguage && Object.keys(resources).includes(deviceLanguage) ? deviceLanguage : 'en';
     }
 
+    const isRtl = savedLanguage === 'ar' || savedLanguage === 'ur';
+
+    // If RTL setting mismatch, set it and reload to apply the layout change
+    if (I18nManager.isRTL !== isRtl) {
+        I18nManager.allowRTL(isRtl);
+        I18nManager.forceRTL(isRtl);
+        await reloadApp();
+    }
+
     i18n
         .use(initReactI18next)
         .init({
@@ -54,4 +77,13 @@ export default i18n;
 export const changeLanguage = async (lang: string) => {
     await AsyncStorage.setItem(LANGUAGE_KEY, lang);
     i18n.changeLanguage(lang);
+
+    const isRtl = lang === 'ar' || lang === 'ur';
+    if (I18nManager.isRTL !== isRtl) {
+        I18nManager.allowRTL(isRtl);
+        I18nManager.forceRTL(isRtl);
+        setTimeout(async () => {
+            await reloadApp();
+        }, 100);
+    }
 };

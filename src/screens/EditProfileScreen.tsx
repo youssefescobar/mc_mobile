@@ -100,13 +100,13 @@ export default function EditProfileScreen({ navigation }: Props) {
         );
     }
 
-    const alignStyle = { textAlign: isRTL ? 'right' : 'left' } as const;
+    
 
     return (
         <View style={styles.container}>
             <View style={styles.backgroundOrbOne} />
             <View style={styles.backgroundOrbTwo} />
-            <SafeAreaView style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]} edges={['top']}>
+            <SafeAreaView style={styles.header} edges={['top']}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color="#1F2A44" />
                 </TouchableOpacity>
@@ -132,7 +132,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                         <View style={styles.form}>
                             <Text style={styles.label}>{t('full_name')}</Text>
                             <TextInput
-                                style={[styles.input, alignStyle]}
+                                style={styles.input}
                                 value={name}
                                 onChangeText={setName}
                                 placeholder={t('full_name_placeholder')}
@@ -151,7 +151,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                                 <>
                                     <Text style={styles.label}>{t('age_optional')}</Text>
                                     <TextInput
-                                        style={[styles.input, alignStyle]}
+                                        style={styles.input}
                                         value={age}
                                         onChangeText={setAge}
                                         placeholder={t('age_placeholder')}
@@ -183,7 +183,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                                     <Text style={styles.label}>{t('medical_history')}</Text>
 
                                     <TextInput
-                                        style={[styles.input, styles.textArea, alignStyle]}
+                                        style={[styles.input, styles.textArea]}
                                         value={medicalHistory}
                                         onChangeText={setMedicalHistory}
                                         placeholder={t('medical_history_placeholder')}
