@@ -1,11 +1,8 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-// Replace with your computer's LAN IP if running on physical device
-// For Android Emulator, use 'http://10.0.2.2:5000'
-// For iOS Simulator, use 'http://localhost:5000'
-// For iOS Simulator, use 'http://localhost:5000'
-export const BASE_URL = 'http://192.168.1.7:5000/api';
+// Default to the railway production url if not provided in .env
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://mcbackendapp-production.up.railway.app/api';
 
 export const api = axios.create({
     baseURL: BASE_URL,
