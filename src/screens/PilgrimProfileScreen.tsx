@@ -4,6 +4,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api, clearAuthToken, logout } from '../services/api';
+import { socketService } from '../services/socket';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useToast } from '../components/ToastContext';
 import { useTranslation } from 'react-i18next';
@@ -213,6 +214,7 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                     text: t('logout'),
                     style: 'destructive',
                     onPress: async () => {
+                        socketService.disconnect();
                         await logout();
                         navigation.reset({
                             index: 0,

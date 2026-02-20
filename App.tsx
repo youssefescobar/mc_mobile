@@ -12,9 +12,7 @@ function AppContent() {
   const { handleIncomingCallFromNotification } = useCall();
 
   useEffect(() => {
-    // Just register for push notifications to get the token. 
-    // The actual backend update should happen after login/splash when we have the auth token.
-    registerForPushNotificationsAsync();
+    // The actual backend update and token fetching now happens during login/signup flows
 
     const cleanup = setupNotificationListeners(
       (notification) => {

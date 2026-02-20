@@ -4,6 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { api, setAuthToken, BASE_URL, logout } from '../services/api';
+import { socketService } from '../services/socket';
 import { Group, Pilgrim } from '../types';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -173,6 +174,7 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                     text: t('log_out'),
                     style: 'destructive',
                     onPress: async () => {
+                        socketService.disconnect();
                         await logout();
                         navigation.reset({
                             index: 0,
