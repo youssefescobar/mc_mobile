@@ -334,5 +334,7 @@
     "show_on_map": "Show on Map",
     "explore": "Explore",
     "leader_hub": "Leader Hub",
-    "calling": "Calling..."
+    "calling": "Calling...",
+    "menu": "Menu",
+    "close": "Close"
 }
