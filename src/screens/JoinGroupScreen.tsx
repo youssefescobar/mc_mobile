@@ -28,7 +28,7 @@ export default function JoinGroupScreen({ navigation, route }: Props) {
         if (!code.trim()) return;
         setLoading(true);
         try {
-            const response = await api.post('/pilgrim/join-group', { group_code: code.trim() });
+            const response = await api.post('/groups/join', { group_code: code.trim() });
             if (response.data.success) {
                 Alert.alert(t('success'), t('joined_group_successfully'));
                 navigation.replace('PilgrimDashboard', { userId: route.params.userId });
