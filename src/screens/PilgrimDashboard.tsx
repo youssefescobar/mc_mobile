@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, Animated, Alert, Platform } from 'react-native';
+import axios from 'axios';
+
 import Map from '../components/Map';
+import { Region } from 'react-native-maps';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api } from '../services/api';
@@ -16,6 +19,8 @@ import { socketService } from '../services/socket';
 import { getUserId, getUserName } from '../services/user';
 import { openNavigation } from '../utils/openNavigation';
 import { useCall } from '../context/CallContext';
+
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PilgrimDashboard'>;
 
@@ -56,8 +61,19 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const sheetAnim = useRef(new Animated.Value(40)).current;
     const [suggestedAreas, setSuggestedAreas] = useState<any[]>([]);
+    const [highlightedMarkerId, setHighlightedMarkerId] = useState<string | null>(null);
+    const [showSuggestedAreas, setShowSuggestedAreas] = useState(false);
+    const [isAreasDrawerVisible, setIsAreasDrawerVisible] = useState(false);
+    const [isToolsExpanded, setIsToolsExpanded] = useState(false);
+    const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
+    const [mapRegion, setMapRegion] = useState<Region | undefined>(undefined);
+    const drawerAnim = useRef(new Animated.Value(600)).current;
+
+
 
     const { showToast } = useToast();
+
+
 
     const fetchNotifications = async () => {
         try {
@@ -217,6 +233,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     };
 
     const handleLocationUpdate = async (location: Location.LocationObject) => {
+        setCurrentLocation(location);
         if (!isSharingLocation) return;
         const now = Date.now();
         if (now - lastLocationUpdate.current < 30000) return;
@@ -251,10 +268,88 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         if (!isSharingLocation) return;
         try {
             const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            setCurrentLocation(location);
             lastLocationUpdate.current = 0;
             handleLocationUpdate(location);
         } catch (e) { }
     };
+
+    const handleNavigatePress = () => {
+        if (!groupInfo?.moderators[0]) return;
+
+        const mod = groupInfo.moderators[0];
+        if (!mod.current_latitude || !mod.current_longitude) {
+            showToast(t('moderator_location_unknown'), 'error');
+            return;
+        }
+
+        Alert.alert(
+            t('navigation_options'),
+            t('choose_navigation_method'),
+            [
+                {
+                    text: t('in_app_view'),
+                    onPress: () => {
+                        setHighlightedMarkerId(mod._id);
+                        // Reset after animation
+                        setTimeout(() => setHighlightedMarkerId(null), 2000);
+                    }
+                },
+                {
+                    text: t('google_maps_app'),
+                    onPress: () => openNavigation(
+                        mod.current_latitude!,
+                        mod.current_longitude!,
+                        mod.full_name,
+                        true // googleMapsOnly
+                    )
+                },
+                { text: t('cancel'), style: 'cancel' }
+            ]
+        );
+    };
+
+    const toggleAreasDrawer = (visible: boolean) => {
+        setIsAreasDrawerVisible(visible);
+        Animated.spring(drawerAnim, {
+            toValue: visible ? 0 : 600,
+            useNativeDriver: true,
+            tension: 50,
+            friction: 8
+        }).start();
+    };
+
+    const handleNavigateAreaPress = (area: any) => {
+
+        Alert.alert(
+            t('navigation_options'),
+            t('choose_navigation_method'),
+            [
+                {
+                    text: t('in_app_view'),
+                    onPress: () => {
+                        setShowSuggestedAreas(true);
+                        setHighlightedMarkerId(`area-${area._id}`);
+                        // Reset after animation
+                        setTimeout(() => setHighlightedMarkerId(null), 2000);
+                    }
+                },
+                {
+                    text: t('google_maps_app'),
+                    onPress: () => openNavigation(
+                        area.latitude,
+                        area.longitude,
+                        area.name,
+                        true
+                    )
+                },
+                { text: t('cancel'), style: 'cancel' }
+            ]
+        );
+    };
+
+
+
 
     const startRealTimeTracking = async () => {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -301,6 +396,17 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         }
     };
 
+    const recenterMap = () => {
+        if (currentLocation) {
+            setMapRegion({
+                latitude: currentLocation.coords.latitude,
+                longitude: currentLocation.coords.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+            });
+        }
+    };
+
     const getBatteryIcon = (level: number | null) => {
         if (level === null) return 'battery-dead';
         if (level >= 90) return 'battery-full';
@@ -312,9 +418,11 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
     return (
         <View style={styles.container}>
-            <View style={styles.mapContainer}>
+            <View style={styles.mapContainer} pointerEvents="box-none">
                 <Map
                     onLocationUpdate={handleLocationUpdate}
+                    highlightedMarkerId={highlightedMarkerId}
+                    region={mapRegion}
                     markers={[
                         ...(groupInfo?.moderators
                             .filter(m => m.current_latitude !== undefined && m.current_longitude !== undefined)
@@ -325,49 +433,88 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                                 title: `${t('moderator')}: ${m.full_name}`,
                                 description: t('group_leader')
                             })) || []),
-                        ...suggestedAreas.map(a => ({
+                        ...(showSuggestedAreas ? suggestedAreas.map(a => ({
                             id: `area-${a._id}`,
                             latitude: a.latitude,
                             longitude: a.longitude,
                             title: `📍 ${a.name}`,
                             description: a.description || t('suggested_areas'),
                             pinColor: '#F59E0B'
-                        }))
+                        })) : [])
                     ]}
                 />
             </View>
 
-            {/* Header overlay */}
-            <View style={styles.header} pointerEvents="box-none">
-                <View style={styles.headerContent} pointerEvents="box-none">
-                    <View style={styles.headerLeft} pointerEvents="box-none">
-                        <View style={styles.iconGroup}>
-                            <TouchableOpacity
-                                style={styles.profileButton}
-                                onPress={() => navigation.navigate('PilgrimProfile', { userId: route.params.userId })}
-                            >
-                                <Ionicons name="person-circle-outline" size={28} color="#0F172A" />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.profileButton}
-                                onPress={() => navigation.navigate('CallHistory')}
-                            >
-                                <Ionicons name="call-outline" size={24} color="#0F172A" />
-                                {missedCallCount > 0 && (
-                                    <View style={styles.badge}>
-                                        <Text style={styles.badgeText}>
-                                            {missedCallCount > 9 ? '9+' : missedCallCount}
-                                        </Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
+            {/* Top Navigation Cluster */}
+            <View style={styles.topCluster} pointerEvents="box-none">
+                <View style={styles.toolsContainer}>
+                    {isToolsExpanded && (
+                        <View style={styles.toolsDropdown}>
+                            <View style={styles.gridRow}>
+                                <TouchableOpacity
+                                    style={styles.circleActionBtn}
+                                    onPress={() => navigation.navigate('PilgrimProfile', { userId: route.params.userId })}
+                                >
+                                    <Ionicons name="person-outline" size={22} color="#0F172A" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.circleActionBtn}
+                                    onPress={() => navigation.navigate('CallHistory')}
+                                >
+                                    <Ionicons name="call-outline" size={22} color="#0F172A" />
+                                    {missedCallCount > 0 && (
+                                        <View style={styles.clusterBadge}>
+                                            <Text style={styles.clusterBadgeText}>
+                                                {missedCallCount > 9 ? '9+' : missedCallCount}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.gridRow}>
+                                <TouchableOpacity
+                                    style={styles.circleActionBtn}
+                                    onPress={() => toggleAreasDrawer(true)}
+                                >
+                                    <Ionicons name="compass-outline" size={22} color="#0F172A" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.circleActionBtn}
+                                    onPress={recenterMap}
+                                >
+                                    <Ionicons name="locate" size={22} color="#2563EB" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                        <TouchableOpacity onPress={handleSOS} activeOpacity={0.8} style={{ marginTop: 12 }}>
+                    )}
+
+                    {/* Tools Toggle */}
+                    <TouchableOpacity
+                        onPress={() => setIsToolsExpanded(!isToolsExpanded)}
+                        activeOpacity={0.8}
+                    >
+                        <View style={[styles.menuRectBtn, isToolsExpanded && styles.menuRectBtnActive]}>
+                            <Ionicons
+                                name={isToolsExpanded ? "chevron-up" : "grid-outline"}
+                                size={20}
+                                color={isToolsExpanded ? "#2563EB" : "#0F172A"}
+                            />
+                            <Text style={[styles.menuText, isToolsExpanded && styles.menuTextActive]}>
+                                {isToolsExpanded ? t('close') : t('menu')}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* SOS Row (Matching width) */}
+                    <View style={styles.sosGridRow}>
+                        <TouchableOpacity onPress={handleSOS} activeOpacity={0.8} style={{ width: '100%' }}>
                             <Animated.View style={[
-                                styles.sosButton,
+                                styles.sosRectBtn,
+                                { width: '100%', justifyContent: 'center' },
                                 sosActive && { transform: [{ scale: pulseAnim }] }
                             ]}>
-                                <Ionicons name="warning" size={16} color="white" style={{ marginRight: 6 }} />
+                                <Ionicons name="warning" size={20} color="white" />
                                 <Text style={styles.sosText}>{t('sos')}</Text>
                             </Animated.View>
                         </TouchableOpacity>
@@ -375,242 +522,428 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                 </View>
             </View>
 
-            {/* Bottom sheet */}
-            <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}>
-                {!groupInfo && (
+
+            {/* Action Card (Leader Hub) */}
+            <Animated.View style={[styles.actionCard, { transform: [{ translateY: sheetAnim }] }]}>
+                {!groupInfo ? (
                     <TouchableOpacity
-                        style={styles.joinButton}
+                        style={styles.joinPrimaryBtn}
                         onPress={() => navigation.navigate('JoinGroup', { userId: route.params.userId })}
                     >
-                        <Ionicons name="enter-outline" size={18} color="white" style={{ marginRight: 8 }} />
-                        <Text style={styles.joinButtonText}>{t('join_group_via_code')}</Text>
+                        <Ionicons name="enter-outline" size={20} color="white" style={{ marginEnd: 8 }} />
+                        <Text style={styles.joinBtnText}>{t('join_group_via_code')}</Text>
                     </TouchableOpacity>
-                )}
-
-                <View style={styles.statusRow}>
-                    <View style={styles.statusChip}>
-                        <Ionicons name="location-outline" size={18} color="#0F766E" />
-                        <View>
-                            <Text style={styles.chipLabel}>{t('location')}</Text>
-                            <Text style={styles.chipValue}>{t('active')}</Text>
-                        </View>
-                    </View>
-                    <View style={styles.statusChip}>
-                        <Ionicons name={getBatteryIcon(batteryLevel)} size={18} color="#1E3A8A" />
-                        <View>
-                            <Text style={styles.chipLabel}>{t('battery')}</Text>
-                            <Text style={styles.chipValue}>{batteryLevel !== null ? `${batteryLevel}%` : '--'}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {groupInfo && (
-                    <View style={styles.groupCard}>
-                        <View style={styles.groupHeaderRow}>
-                            <View style={styles.groupIconCircle}>
-                                <Ionicons name="people" size={16} color="#2563EB" />
+                ) : (
+                    <>
+                        {/* Status Bar */}
+                        <View style={styles.compactStatusRow}>
+                            <View style={styles.miniChip}>
+                                <Ionicons name="location" size={12} color="#10B981" />
+                                <Text style={styles.miniChipText}>{t('active')}</Text>
                             </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.groupName}>{groupInfo.group_name}</Text>
-                                <Text style={styles.moderatorLabel}>
-                                    {t('led_by')} <Text style={styles.moderatorName}>{groupInfo.moderators[0]?.full_name || t('assigned')}</Text>
+                            <View style={styles.miniChip}>
+                                <Ionicons name={getBatteryIcon(batteryLevel)} size={12} color="#3B82F6" />
+                                <Text style={styles.miniChipText}>{batteryLevel !== null ? `${batteryLevel}%` : '--'}</Text>
+                            </View>
+                        </View>
+
+                        {/* Leader Section */}
+                        <View style={styles.leaderSection}>
+                            <View style={styles.leaderInfo}>
+                                <Text style={styles.leaderTitle}>{groupInfo.group_name}</Text>
+                                <Text style={styles.leaderName} numberOfLines={1}>
+                                    {groupInfo.moderators[0]?.full_name || t('assigned')}
                                 </Text>
                             </View>
+                            <View style={styles.leaderActions}>
+                                <TouchableOpacity
+                                    style={[styles.iconActionBtn, { backgroundColor: '#10B981' }]}
+                                    onPress={handleNavigatePress}
+                                >
+                                    <Ionicons name="navigate" size={20} color="white" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.iconActionBtn, { backgroundColor: '#3B82F6' }]}
+                                    onPress={() => startCall(groupInfo.moderators[0]._id, groupInfo.moderators[0].full_name)}
+                                >
+                                    <Ionicons name="call" size={20} color="white" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
+
+                        {/* Broadcast Button */}
                         <TouchableOpacity
-                            style={styles.messageButton}
+                            style={styles.broadcastBtn}
                             onPress={() => navigation.navigate('PilgrimMessagesScreen', {
                                 groupId: groupInfo.group_id,
                                 groupName: groupInfo.group_name,
                                 userId: route.params.userId
                             })}
                         >
-                            <Ionicons name="chatbubbles-outline" size={16} color="#2563EB" style={{ marginRight: 8 }} />
-                            <Text style={styles.messageButtonText}>{t('broadcasts_updates')}</Text>
+                            <Ionicons name="chatbubbles-outline" size={20} color="white" style={{ marginEnd: 8 }} />
+                            <Text style={styles.broadcastBtnText}>{t('broadcasts_updates')}</Text>
                             {unreadCount > 0 && (
-                                <View style={styles.unreadBadge}>
-                                    <Text style={styles.unreadBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                                <View style={styles.broadcastBadge}>
+                                    <Text style={styles.broadcastBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                                 </View>
                             )}
                         </TouchableOpacity>
-
-                        {groupInfo.allow_pilgrim_navigation && groupInfo.moderators[0]?.current_latitude && groupInfo.moderators[0]?.current_longitude && (
-                            <TouchableOpacity
-                                style={styles.navigateModButton}
-                                onPress={() => openNavigation(
-                                    groupInfo.moderators[0].current_latitude!,
-                                    groupInfo.moderators[0].current_longitude!,
-                                    groupInfo.moderators[0].full_name
-                                )}
-                            >
-                                <Ionicons name="navigate-outline" size={16} color="white" style={{ marginRight: 8 }} />
-                                <Text style={styles.navigateModButtonText}>{t('navigate_to_moderator')}</Text>
-                            </TouchableOpacity>
-                        )}
-
-                        {groupInfo && groupInfo.moderators.length > 0 && (
-                            <TouchableOpacity
-                                style={styles.callModButton}
-                                onPress={() => startCall(groupInfo.moderators[0]._id, groupInfo.moderators[0].full_name)}
-                            >
-                                <Ionicons name="call" size={16} color="white" style={{ marginRight: 8 }} />
-                                <Text style={styles.navigateModButtonText}>{t('call_moderator')}</Text>
-                            </TouchableOpacity>
-                        )}
-
-                        {/* Suggested Areas Section */}
-                        {suggestedAreas.length > 0 && (
-                            <View style={styles.suggestedSection}>
-                                <Text style={[styles.suggestedTitle, { textAlign: isRTL ? 'right' : 'left' }]}>📍 {t('suggested_areas')}</Text>
-                                {suggestedAreas.map(area => (
-                                    <View key={area._id} style={styles.suggestedRow}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.suggestedName}>{area.name}</Text>
-                                            {area.description ? <Text style={styles.suggestedDesc}>{area.description}</Text> : null}
-                                        </View>
-                                        <TouchableOpacity
-                                            style={styles.navigateAreaBtn}
-                                            onPress={() => openNavigation(area.latitude, area.longitude, area.name)}
-                                        >
-                                            <Ionicons name="navigate-outline" size={14} color="white" style={{ marginRight: 4 }} />
-                                            <Text style={styles.navigateAreaText}>{t('navigate_to_area')}</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
-                    </View>
+                    </>
                 )}
+            </Animated.View>
+
+            {/* Suggested Areas Drawer */}
+            <Animated.View style={[styles.drawer, { transform: [{ translateY: drawerAnim }] }]}>
+                <View style={styles.drawerHandle} />
+                <View style={styles.drawerHeader}>
+                    <Text style={styles.drawerTitle}>📍 {t('suggested_areas')}</Text>
+                    <TouchableOpacity onPress={() => toggleAreasDrawer(false)}>
+                        <Ionicons name="close-circle" size={28} color="#94A3B8" />
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.drawerToggleContainer}>
+                    <Text style={styles.drawerToggleLabel}>{t('show_on_map')}</Text>
+                    <Switch
+                        value={showSuggestedAreas}
+                        onValueChange={setShowSuggestedAreas}
+                        trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
+                        thumbColor={showSuggestedAreas ? '#2563EB' : '#94A3B8'}
+                    />
+                </View>
+
+                <View style={styles.areasList}>
+                    {suggestedAreas.map(area => (
+                        <View key={area._id} style={styles.areaItem}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.areaName}>{area.name}</Text>
+                                {area.description ? <Text style={styles.areaDesc} numberOfLines={1}>{area.description}</Text> : null}
+                            </View>
+                            <TouchableOpacity
+                                style={styles.areaNavBtn}
+                                onPress={() => handleNavigateAreaPress(area)}
+                            >
+                                <Ionicons name="navigate-outline" size={16} color="#2563EB" />
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+                </View>
             </Animated.View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
+
     container: {
         flex: 1,
-        backgroundColor: '#F1F5F9',
-    },
-    header: {
-        position: 'absolute',
-        top: 8,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-        paddingHorizontal: 20,
-    },
-    headerContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingTop: 8,
-    },
-    headerLeft: {
-        alignItems: 'flex-start',
-    },
-    iconGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    profileButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: 'white',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    joinButton: {
-        flexDirection: 'row',
-        backgroundColor: '#2563EB',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 14,
-        shadowColor: '#2563EB',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    joinButtonText: {
-        color: 'white',
-        fontWeight: '700',
-        fontSize: 15,
+        backgroundColor: '#F8FAFC',
     },
     mapContainer: {
         flex: 1,
     },
-    sheet: {
+    // Top Cluster
+    topCluster: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        paddingHorizontal: 16,
+        paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    },
+    toolsContainer: {
+        width: 104,
+    },
+    toolsDropdown: {
+        marginBottom: 8,
+    },
+    gridRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    menuRectBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        gap: 8,
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+    },
+    menuRectBtnActive: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    menuText: {
+        color: '#0F172A',
+        fontWeight: '800',
+        fontSize: 13,
+    },
+    menuTextActive: {
+        color: '#2563EB',
+    },
+    circleActionBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+    },
+    clusterBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'white',
+    },
+    clusterBadgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    sosGridRow: {
+        marginTop: 8,
+        width: 104,
+    },
+    sosRectBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 12,
+        gap: 8,
+        elevation: 8,
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+    },
+    sosText: {
+        color: 'white',
+        fontWeight: '900',
+        fontSize: 15,
+        textTransform: 'uppercase',
+    },
+    // Action Card (Leader Hub)
+    actionCard: {
+        position: 'absolute',
+        bottom: 24,
+        left: 16,
+        right: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+        borderRadius: 28,
+        padding: 20,
+        elevation: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+    },
+    joinPrimaryBtn: {
+        flexDirection: 'row',
+        backgroundColor: '#2563EB',
+        height: 56,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    joinBtnText: {
+        color: 'white',
+        fontWeight: '800',
+        fontSize: 16,
+    },
+    compactStatusRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 12,
+        marginBottom: 16,
+    },
+    miniChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#F1F5F9',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 20,
+    },
+    miniChipText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    leaderSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        padding: 14,
+        borderRadius: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+    },
+    leaderInfo: {
+        flex: 1,
+    },
+    leaderTitle: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#94A3B8',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    leaderName: {
+        fontSize: 17,
+        fontWeight: '800',
+        color: '#0F172A',
+        marginTop: 2,
+    },
+    leaderActions: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    iconActionBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    broadcastBtn: {
+        backgroundColor: '#2563EB',
+        height: 56,
+        borderRadius: 18,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 4,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+    },
+    broadcastBtnText: {
+        color: 'white',
+        fontWeight: '700',
+        fontSize: 15,
+    },
+    broadcastBadge: {
+        backgroundColor: '#EF4444',
+        borderRadius: 12,
+        minWidth: 22,
+        height: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginStart: 10,
+        borderWidth: 2,
+        borderColor: 'white',
+    },
+    broadcastBadgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    // Suggested Areas Drawer
+    drawer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 4,
         backgroundColor: 'white',
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        padding: 24,
+        paddingTop: 12,
+        elevation: 25,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 10,
+        shadowOffset: { width: 0, height: -10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 24,
+        zIndex: 200,
+        maxHeight: '80%',
     },
-    statusRow: {
-        flexDirection: 'row',
-        gap: 10,
-        marginBottom: 16,
+    drawerHandle: {
+        width: 40,
+        height: 5,
+        backgroundColor: '#E2E8F0',
+        borderRadius: 3,
+        alignSelf: 'center',
+        marginBottom: 20,
     },
-    statusChip: {
-        flex: 1,
+    drawerHeader: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        gap: 10,
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        borderRadius: 14,
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
+        marginBottom: 20,
     },
-    chipLabel: {
-        fontSize: 10,
-        fontWeight: '600',
-        color: '#94A3B8',
-        textTransform: 'uppercase',
-        letterSpacing: 0.8,
-    },
-    chipValue: {
-        fontSize: 17,
+    drawerTitle: {
+        fontSize: 20,
         fontWeight: '800',
         color: '#0F172A',
-        marginTop: 1,
     },
-    groupCard: {
+    drawerToggleContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         backgroundColor: '#F8FAFC',
+        padding: 14,
         borderRadius: 16,
+        marginBottom: 20,
+    },
+    drawerToggleLabel: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    areasList: {
+        gap: 12,
+    },
+    areaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
         padding: 16,
-        marginBottom: 4,
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: '#F1F5F9',
     },
-    groupHeaderRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-        gap: 12,
+    areaName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1E293B',
     },
-    groupIconCircle: {
+    areaDesc: {
+        fontSize: 13,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    areaNavBtn: {
         width: 36,
         height: 36,
         borderRadius: 18,
@@ -618,160 +951,5 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    groupName: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#0F172A',
-    },
-    moderatorLabel: {
-        fontSize: 13,
-        color: '#94A3B8',
-        marginTop: 2,
-    },
-    moderatorName: {
-        fontWeight: '600',
-        color: '#64748B',
-    },
-    messageButton: {
-        backgroundColor: '#EFF6FF',
-        paddingVertical: 12,
-        borderRadius: 12,
-        alignItems: 'center',
-        flexDirection: 'row',
-        justifyContent: 'center',
-    },
-    messageButtonText: {
-        color: '#2563EB',
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    unreadBadge: {
-        backgroundColor: '#EF4444',
-        borderRadius: 12,
-        minWidth: 22,
-        height: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 6,
-        marginLeft: 12,
-    },
-    unreadBadgeText: {
-        color: 'white',
-        fontSize: 11,
-        fontWeight: '700',
-    },
-    sosButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#EF4444',
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        borderRadius: 21,
-        shadowColor: '#DC2626',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-        elevation: 5,
-    },
-    sosText: {
-        color: 'white',
-        fontSize: 15,
-        fontWeight: '800',
-        letterSpacing: 1,
-    },
-    navigateModButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#10B981',
-        borderRadius: 12,
-        paddingVertical: 12,
-        marginTop: 12,
-        elevation: 2,
-        shadowColor: '#059669',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-    },
-    callModButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#2563EB',
-        borderRadius: 12,
-        paddingVertical: 12,
-        marginTop: 8,
-        elevation: 2,
-        shadowColor: '#1E40AF',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-    },
-    navigateModButtonText: {
-        color: 'white',
-        fontSize: 14,
-        fontWeight: 'bold',
-        marginLeft: 8,
-    },
-    badge: {
-        position: 'absolute',
-        top: -2,
-        right: -2,
-        backgroundColor: '#EF4444',
-        borderRadius: 10,
-        width: 18,
-        height: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: 'white',
-    },
-    badgeText: {
-        color: 'white',
-        fontSize: 10,
-        fontWeight: '700',
-    },
-    suggestedSection: {
-        marginTop: 20,
-        paddingTop: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
-    },
-    suggestedTitle: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#64748B',
-        marginBottom: 12,
-    },
-    suggestedRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
-    },
-    suggestedName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#0F172A',
-    },
-    suggestedDesc: {
-        fontSize: 12,
-        color: '#94A3B8',
-        marginTop: 2,
-    },
-    navigateAreaBtn: {
-        flexDirection: 'row',
-        backgroundColor: '#2563EB',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    navigateAreaText: {
-        color: 'white',
-        fontSize: 11,
-        fontWeight: '700',
-    },
 });
+

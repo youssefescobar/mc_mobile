@@ -237,8 +237,7 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
         return (
             <View style={[
                 styles.messageRow,
-                isModeratorSender ? styles.rowLeft : styles.rowRight,
-                isRTL && { flexDirection: isModeratorSender ? 'row-reverse' : 'row' }
+                isModeratorSender ? styles.rowStart : styles.rowEnd,
             ]}>
                 {/* Avatar only for Moderator (Left side) */}
                 {isModeratorSender && (
@@ -307,7 +306,7 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
                         />
                     )}
 
-                    <Text style={[styles.time, isModeratorSender ? { color: '#64748B' } : { color: '#E0E7FF', alignSelf: 'flex-end' }]}>
+                    <Text style={[styles.time, isModeratorSender ? { color: '#64748B' } : { color: '#E0E7FF' }]}>
                         {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                 </View>
@@ -317,11 +316,11 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
 
     return (
         <View style={styles.container}>
-            <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, isRTL && { marginRight: 0, marginLeft: 16 }]}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={24} color="#0F172A" />
                 </TouchableOpacity>
-                <View style={[styles.headerContent, isRTL && { alignItems: 'flex-end' }]}>
+                <View style={styles.headerContent}>
                     <Text style={styles.title}>{groupName}</Text>
                     <Text style={styles.subtitle}>{t('broadcasts_updates') || 'Group Updates'}</Text>
                 </View>
@@ -330,19 +329,21 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
             {loading ? (
                 <ActivityIndicator size="large" color="#007AFF" style={styles.loader} />
             ) : (
-                <FlatList
-                    data={messages}
-                    renderItem={renderItem}
-                    keyExtractor={item => item._id}
-                    contentContainerStyle={styles.list}
-                    inverted  // Newest at bottom
-                    ListEmptyComponent={
-                        <View style={[styles.emptyContainer, { transform: [{ scaleY: -1 }] }]}>
+                <>
+                    <FlatList
+                        data={messages}
+                        renderItem={renderItem}
+                        keyExtractor={item => item._id}
+                        contentContainerStyle={styles.list}
+                        inverted  // Newest at bottom
+                    />
+                    {!loading && messages.length === 0 && (
+                        <View style={styles.emptyContainer}>
                             <Ionicons name="chatbubbles-outline" size={48} color="#CBD5E1" />
-                            <Text style={styles.empty}>{t('no_messages_yet') || 'No messages yet'}</Text>
+                            <Text style={styles.emptyText}>{t('no_messages_yet') || 'No messages yet'}</Text>
                         </View>
-                    }
-                />
+                    )}
+                </>
             )}
         </View>
     );
@@ -364,7 +365,7 @@ const styles = StyleSheet.create({
         zIndex: 10,
     },
     backBtn: {
-        marginRight: 16,
+        marginEnd: 16,
         padding: 4,
     },
     headerContent: {
@@ -391,9 +392,13 @@ const styles = StyleSheet.create({
     },
     emptyContainer: {
         alignItems: 'center',
-        marginTop: 80,
+        paddingTop: 100,
+        position: 'absolute',
+        top: 80,
+        left: 0,
+        right: 0,
     },
-    empty: {
+    emptyText: {
         textAlign: 'center',
         marginTop: 12,
         color: '#94A3B8',
@@ -407,10 +412,10 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
         gap: 8,
     },
-    rowLeft: {
+    rowStart: {
         justifyContent: 'flex-start',
     },
-    rowRight: {
+    rowEnd: {
         justifyContent: 'flex-end',
     },
     avatar: {

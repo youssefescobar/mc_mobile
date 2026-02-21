@@ -321,5 +321,18 @@
     "time_ago_d": "ي",
     "default_group_name": "مجموعة",
     "your_location": "موقعك",
-    "location_not_available": "الموقع غير متاح. يرجى الانتظار قليلاً أو التأكد من تشغيل نظام تحديد المواقع (GPS)."
+    "location_not_available": "الموقع غير متاح. يرجى الانتظار قليلاً أو التأكد من تشغيل نظام تحديد المواقع (GPS).",
+    "navigation_options": "خيارات التوجه",
+    "choose_navigation_method": "اختر طريقة التوجه",
+    "in_app_view": "عرض داخل التطبيق (المسافة والوقت)",
+    "google_maps_app": "تطبيق خرائط جوجل",
+    "navigation_error": "تعذر حساب المسافة/الوقت",
+    "moderator_location_unknown": "موقع المشرف غير معروف حاليًا",
+    "distance": "المسافة",
+    "time": "الوقت",
+    "open_in_google_maps": "فتح في خرائط جوجل",
+    "show_on_map": "عرض على الخريطة",
+    "explore": "استكشاف",
+    "leader_hub": "مركز القائد",
+    "calling": "جاري الاتصال..."
 }
