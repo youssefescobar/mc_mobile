@@ -35,13 +35,13 @@ export async function registerForPushNotificationsAsync() {
         await Notifications.setNotificationChannelAsync('incoming_call', {
             name: 'Incoming Calls',
             importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 1000, 1000, 1000, 1000, 1000], // Continuous vibration pattern
+            vibrationPattern: [0, 1000, 1000, 1000, 1000, 1000],
             lightColor: '#00FF00',
-            sound: 'default', // Use default ringtone
+            sound: 'default',
             enableVibrate: true,
             showBadge: true,
             lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-            bypassDnd: true, // Bypass Do Not Disturb
+            bypassDnd: true,
         });
     }
 
