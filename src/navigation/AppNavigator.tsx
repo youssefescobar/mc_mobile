@@ -57,7 +57,7 @@ export default function AppNavigator() {
                     <Stack.Screen name="ModeratorMessagesScreen" component={ModeratorMessagesScreen} />
                     <Stack.Screen name="JoinGroup" component={JoinGroupScreen} />
                     <Stack.Screen name="CommunicationScreen" component={CommunicationScreen} />
-                    <Stack.Screen name="CallHistory" component={CallHistoryScreen} options={{ headerShown: true, title: 'Call History' }} />
+                    <Stack.Screen name="CallHistory" component={CallHistoryScreen} />
                 </Stack.Navigator>
             </NavigationContainer>
         </ToastProvider>

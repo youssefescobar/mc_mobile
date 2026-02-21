@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Default to the railway production url if not provided in .env
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://mcbackendapp-production.up.railway.app/api';
@@ -33,6 +34,7 @@ export const logout = async () => {
     } catch (error) {
         console.error('Logout failed on server', error);
     } finally {
+        await AsyncStorage.multiRemove(['token', 'user_role', 'user_id', 'full_name']);
         clearAuthToken();
     }
 };

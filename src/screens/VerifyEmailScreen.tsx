@@ -126,7 +126,7 @@ export default function VerifyEmailScreen({ route, navigation }: Props) {
     const isRTL = i18n.language === 'ar' || i18n.language === 'ur';
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <KeyboardAvoidingView
                 style={styles.container}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -206,7 +206,7 @@ export default function VerifyEmailScreen({ route, navigation }: Props) {
                     </ScrollView>
                 </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     },
     content: {
         flexGrow: 1,
-        paddingBottom: 24,
+        paddingBottom: 12,
     },
     topBar: {
         flexDirection: 'row',
@@ -240,13 +240,14 @@ const styles = StyleSheet.create({
     },
     innerContent: {
         flex: 1,
-        padding: 24,
+        padding: 16,
+        paddingTop: 40,
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
     },
     headerContainer: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: 24,
     },
     iconCircle: {
         width: 80,
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         width: '100%',
         maxWidth: 340,
-        marginBottom: 40,
+        marginBottom: 24,
     },
     codeBox: {
         width: 45,

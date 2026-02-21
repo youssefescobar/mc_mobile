@@ -4,6 +4,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api, setAuthToken, updateFCMToken } from '../services/api';
+import { ActivityIndicator } from 'react-native';
+import { registerForPushNotificationsAsync } from '../services/NotificationService';
 
 type WelcomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Welcome'>;
 
@@ -13,6 +17,7 @@ const WelcomeScreen = () => {
     const navigation = useNavigation<WelcomeScreenNavigationProp>();
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.8)).current;
+    const [isCheckingSession, setIsCheckingSession] = React.useState(true);
 
     useEffect(() => {
         Animated.parallel([
@@ -29,13 +34,58 @@ const WelcomeScreen = () => {
             }),
         ]).start();
 
-        const timer = setTimeout(() => {
-            // Navigate to Login after 3 seconds
-            // In a real app, you might check for auth token here
-            navigation.replace('Login');
-        }, 3000);
+        const checkAuth = async () => {
+            try {
+                const token = await AsyncStorage.getItem('token');
+                if (token) {
+                    console.log('[Welcome] Token found, verifying...');
+                    setAuthToken(token);
+                    const response = await api.get('/auth/me');
 
-        return () => clearTimeout(timer);
+                    if (response.data) {
+                        const user = response.data;
+                        console.log('[Welcome] Session valid for:', user.role);
+
+                        // Update local storage with latest info
+                        await AsyncStorage.setItem('role', user.role);
+                        await AsyncStorage.setItem('user_id', user._id);
+                        if (user.full_name) {
+                            await AsyncStorage.setItem('full_name', user.full_name);
+                        }
+
+                        // Refresh FCM Token in background
+                        registerForPushNotificationsAsync().then(fcmToken => {
+                            if (fcmToken) {
+                                updateFCMToken(fcmToken);
+                            }
+                        });
+
+                        // Small delay to let splash animation play
+                        setTimeout(() => {
+                            if (user.role === 'pilgrim') {
+                                navigation.replace('PilgrimDashboard', { userId: user._id });
+                            } else {
+                                navigation.replace('ModeratorDashboard', { userId: user._id });
+                            }
+                        }, 2000);
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.log('[Welcome] Session verification failed or no token:', error);
+                // Clear potentially invalid token
+                await AsyncStorage.multiRemove(['token', 'user_role', 'user_id', 'full_name']);
+            } finally {
+                setIsCheckingSession(false);
+            }
+
+            // If we're here, no valid session found. Go to Login after a delay.
+            setTimeout(() => {
+                navigation.replace('Login');
+            }, 2500);
+        };
+
+        checkAuth();
     }, [fadeAnim, scaleAnim, navigation]);
 
     return (
@@ -63,6 +113,12 @@ const WelcomeScreen = () => {
 
                     <Text style={styles.title}>Munawwara Care</Text>
                     <Text style={styles.subtitle}>Compassionate Care for Pilgrims</Text>
+
+                    {isCheckingSession && (
+                        <View style={{ marginTop: 40 }}>
+                            <ActivityIndicator size="small" color="#2563eb" />
+                        </View>
+                    )}
                 </Animated.View>
 
                 <View style={styles.footer}>

@@ -70,7 +70,7 @@ export default function JoinGroupScreen({ navigation, route }: Props) {
 
     if (showScanner) {
         return (
-            <SafeAreaView style={styles.container}>
+            <View style={styles.container}>
                 <View style={styles.scannerHeader}>
                     <TouchableOpacity onPress={() => setShowScanner(false)} style={styles.backButton}>
                         <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={24} color="#fff" />
@@ -94,12 +94,12 @@ export default function JoinGroupScreen({ navigation, route }: Props) {
                         </Text>
                     </View>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, isRTL && { marginRight: 0, marginLeft: 16 }]}>
                     <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={24} color="#1e293b" />
@@ -154,7 +154,7 @@ export default function JoinGroupScreen({ navigation, route }: Props) {
                     <Text style={[styles.scanButtonText, isRTL && { marginLeft: 0, marginRight: 8 }]}>{t('scan_qr_code')}</Text>
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 24,
+        padding: 16,
     },
     backButton: {
         padding: 8,
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: 24,
         alignItems: 'center',
-        paddingTop: 60,
+        paddingTop: 32,
     },
     iconContainer: {
         width: 120,

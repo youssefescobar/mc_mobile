@@ -100,13 +100,13 @@ export default function EditProfileScreen({ navigation }: Props) {
         );
     }
 
-    
+
 
     return (
         <View style={styles.container}>
             <View style={styles.backgroundOrbOne} />
             <View style={styles.backgroundOrbTwo} />
-            <SafeAreaView style={styles.header} edges={['top']}>
+            <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color="#1F2A44" />
                 </TouchableOpacity>
@@ -114,7 +114,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                 <TouchableOpacity onPress={handleSave} disabled={loading} style={styles.saveButton}>
                     {loading ? <ActivityIndicator size="small" color="#1F6FEB" /> : <Text style={styles.saveButtonText}>{t('save')}</Text>}
                 </TouchableOpacity>
-            </SafeAreaView>
+            </View>
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
@@ -136,6 +136,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                                 value={name}
                                 onChangeText={setName}
                                 placeholder={t('full_name_placeholder')}
+                                placeholderTextColor="#94A3B8"
                             />
 
                             <Text style={styles.label}>{t('phone_number')}</Text>
@@ -144,6 +145,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                                 value={phone}
                                 onChangeText={setPhone}
                                 placeholder={t('phone_number_placeholder')}
+                                placeholderTextColor="#94A3B8"
                                 keyboardType="phone-pad"
                             />
 
@@ -155,6 +157,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                                         value={age}
                                         onChangeText={setAge}
                                         placeholder={t('age_placeholder')}
+                                        placeholderTextColor="#94A3B8"
                                         keyboardType="numeric"
                                     />
 
@@ -187,6 +190,7 @@ export default function EditProfileScreen({ navigation }: Props) {
                                         value={medicalHistory}
                                         onChangeText={setMedicalHistory}
                                         placeholder={t('medical_history_placeholder')}
+                                        placeholderTextColor="#94A3B8"
                                         multiline
                                         numberOfLines={4}
                                     />
@@ -194,7 +198,6 @@ export default function EditProfileScreen({ navigation }: Props) {
                             )}
                         </View>
                     </Animated.View>
-                    <View style={{ height: 40 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
         </View>
@@ -237,8 +240,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 18,
-        paddingBottom: 14,
-        paddingTop: 10,
+        paddingBottom: 8,
+        paddingTop: 8,
     },
     backButton: {
         width: 40,
@@ -264,7 +267,8 @@ const styles = StyleSheet.create({
         color: '#1F2A44',
     },
     content: {
-        padding: 20,
+        padding: 16,
+        paddingTop: 8,
     },
     imageContainer: {
         alignItems: 'center',

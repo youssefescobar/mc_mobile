@@ -314,5 +314,7 @@
     "time_ago_m": "د",
     "time_ago_h": "س",
     "time_ago_d": "ي",
-    "default_group_name": "مجموعة"
+    "default_group_name": "مجموعة",
+    "your_location": "موقعك",
+    "location_not_available": "الموقع غير متاح. يرجى الانتظار قليلاً أو التأكد من تشغيل نظام تحديد المواقع (GPS)."
 }

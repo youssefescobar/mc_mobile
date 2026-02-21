@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import CallTypeModal from '../components/CallTypeModal';
 import { useCall } from '../context/CallContext';
+import { useIsRTL } from '../hooks/useIsRTL';
 
 interface CallRecord {
     _id: string;
@@ -30,6 +31,7 @@ export default function CallHistoryScreen() {
     const { startCall } = useCall();
     const navigation = useNavigation();
     const { t } = useTranslation();
+    const isRTL = useIsRTL();
     const [calls, setCalls] = useState<CallRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -159,6 +161,13 @@ export default function CallHistoryScreen() {
 
     return (
         <View style={styles.container}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={24} color="#1F2A44" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>{t('call_history')}</Text>
+                <View style={{ width: 40 }} />
+            </View>
             <FlatList
                 data={calls}
                 renderItem={renderCallItem}
@@ -202,8 +211,30 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1F2A44',
+    },
+    backButton: {
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     listContainer: {
-        padding: 16,
+        padding: 12,
+        paddingTop: 4,
     },
     emptyContainer: {
         flex: 1,
@@ -216,7 +247,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         padding: 16,
         borderRadius: 12,
-        marginBottom: 12,
+        marginBottom: 8,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,

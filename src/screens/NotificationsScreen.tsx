@@ -229,7 +229,7 @@ export default function NotificationsScreen({ navigation }: Props) {
 
     return (
         <View style={styles.container}>
-            <SafeAreaView style={styles.headerSafeArea}>
+            <View style={styles.headerSafeArea}>
                 <View style={[styles.header, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={24} color="#007AFF" />
@@ -239,7 +239,7 @@ export default function NotificationsScreen({ navigation }: Props) {
                         <Text style={styles.clearButtonText}>{t('clear_viewed')}</Text>
                     </TouchableOpacity>
                 </View>
-            </SafeAreaView>
+            </View>
 
             {loading ? (
                 <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 20 }} />
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 15,
-        paddingBottom: 15,
+        paddingBottom: 10,
         paddingTop: 10,
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
         color: '#007AFF',
     },
     listContainer: {
-        padding: 15,
+        padding: 12,
         flex: 1,
     },
     sectionTitle: {

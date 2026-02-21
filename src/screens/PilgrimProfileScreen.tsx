@@ -266,7 +266,7 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.container}>
             <View style={styles.backgroundOrbOne} />
             <View style={styles.backgroundOrbTwo} />
             <View style={styles.header}>
@@ -320,6 +320,7 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
                                     <TextInput
                                         style={styles.emailInput}
                                         placeholder={t('enter_your_email')}
+                                        placeholderTextColor="#94A3B8"
                                         value={newEmail}
                                         onChangeText={setNewEmail}
                                         autoCapitalize="none"
@@ -373,7 +374,7 @@ export default function PilgrimProfileScreen({ navigation, route }: Props) {
             </ScrollView>
 
             {renderPickerModal()}
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -451,7 +452,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 20,
-        paddingBottom: 40,
+        paddingBottom: 4,
     },
     animatedWrap: {
         gap: 12,
@@ -654,7 +655,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        paddingHorizontal: 18,
+        paddingVertical: 8,
     },
     modalTitle: {
         fontSize: 20,

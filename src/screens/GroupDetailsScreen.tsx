@@ -89,6 +89,62 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
     const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Get moderator's GPS when modal opens
+    // We already have `myLocation` state defined at line 87 (const [myLocation, setMyLocation] = useState...)
+
+    // Track moderator's region override
+    const [forceRegion, setForceRegion] = useState<any>(null);
+
+    const handleCenterOnModerator = () => {
+        if (myLocation) {
+            setForceRegion({
+                latitude: myLocation.latitude,
+                longitude: myLocation.longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+                timestamp: Date.now() // Trigger animateToRegion in Map.tsx
+            });
+            setSelectedPilgrimId(null);
+        } else {
+            showToast(t('location_not_available') || 'Location not available. Please wait a bit or ensure your GPS is turned on.', 'error');
+        }
+    };
+
+    // Continuously watch moderator location if navigation is allowed
+    useEffect(() => {
+        let locationSub: Location.LocationSubscription;
+
+        const startWatchingLocation = async () => {
+            if (allowPilgrimNav) {
+                try {
+                    const { status } = await Location.requestForegroundPermissionsAsync();
+                    if (status === 'granted') {
+                        locationSub = await Location.watchPositionAsync(
+                            {
+                                accuracy: Location.Accuracy.Balanced,
+                                timeInterval: 5000,
+                                distanceInterval: 5,
+                            },
+                            (loc) => {
+                                setMyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+                            }
+                        );
+                    }
+                } catch (e) {
+                    console.log('Error watching moderator location for map', e);
+                }
+            }
+        };
+
+        startWatchingLocation();
+
+        return () => {
+            if (locationSub) {
+                locationSub.remove();
+            }
+        };
+    }, [allowPilgrimNav]);
+
+    // Get moderator's GPS when modal opens
     useEffect(() => {
         if (!showSuggestAreaModal) return;
         (async () => {
@@ -402,7 +458,16 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
         pinColor: '#F59E0B' // Orange/amber for suggested areas
     }));
 
-    const mapMarkers = [...pilgrimMarkers, ...suggestedAreaMarkers];
+    const moderatorMarker = (allowPilgrimNav && myLocation) ? [{
+        id: 'moderator-location',
+        latitude: myLocation.latitude,
+        longitude: myLocation.longitude,
+        title: t('your_location') || 'Your Location',
+        description: t('moderator') || 'Moderator',
+        pinColor: 'blue'
+    }] : [];
+
+    const mapMarkers = [...pilgrimMarkers, ...suggestedAreaMarkers, ...moderatorMarker];
 
     const getInitialRegion = () => {
         if (!pilgrimsWithLocation.length) return undefined;
@@ -444,7 +509,7 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
 
     return (
         <GestureHandlerRootView style={styles.container}>
-            <SafeAreaView style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]} edges={['top']}>
+            <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={24} color="#1A1A1A" />
                 </TouchableOpacity>
@@ -452,17 +517,23 @@ export default function GroupDetailsScreen({ route, navigation }: Props) {
                 <TouchableOpacity onPress={() => setShowDeleteGroupModal(true)} style={styles.backButton}>
                     <Ionicons name="trash-outline" size={22} color="#EF4444" />
                 </TouchableOpacity>
-            </SafeAreaView>
+            </View>
 
             <View style={styles.content}>
                 <View style={styles.mapCard}>
                     <Map
                         initialRegion={mapRegion}
+                        region={forceRegion}
                         markers={mapMarkers}
                         highlightedMarkerId={selectedPilgrimId}
                         followsUserLocation={false}
                         showsUserLocation={false}
                     />
+                    {allowPilgrimNav && (
+                        <TouchableOpacity style={styles.relocateBtn} onPress={handleCenterOnModerator}>
+                            <Ionicons name="location" size={20} color="#2563EB" />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 <View style={[styles.statsRow, isRTL && { flexDirection: 'row-reverse' }]}>
@@ -1041,6 +1112,22 @@ const styles = StyleSheet.create({
         shadowRadius: 10,
         elevation: 4,
     },
+    relocateBtn: {
+        position: 'absolute',
+        bottom: 16,
+        right: 16,
+        backgroundColor: 'white',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
+    },
     statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1459,7 +1546,7 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        bottom: 80,
+        bottom: 30,
         right: 24,
         backgroundColor: '#2563EB',
         width: 56,

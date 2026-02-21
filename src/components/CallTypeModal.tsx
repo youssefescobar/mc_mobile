@@ -86,15 +86,19 @@ const styles = StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
+        justifyContent: 'flex-end',
         alignItems: 'center',
-        padding: 20,
+        padding: 0,
     },
     modalContainer: {
         backgroundColor: 'white',
-        borderRadius: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        borderBottomLeftRadius: 0,
+        borderBottomRightRadius: 0,
         width: '100%',
         padding: 24,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 24,
         alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: {

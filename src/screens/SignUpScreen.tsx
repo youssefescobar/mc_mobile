@@ -3,7 +3,6 @@ import { View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingVi
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api, setAuthToken } from '../services/api';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useToast } from '../components/ToastContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -61,6 +60,7 @@ export default function SignUpScreen({ navigation }: Props) {
     const [password, setPassword] = useState('');
     const [email, setEmail] = useState('');
     const [medicalHistory, setMedicalHistory] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     // Initialize language from current i18n language
     const currentLang = LANGUAGES.find(l => l.value === i18n.language) || LANGUAGES[0];
     const [selectedLanguage, setSelectedLanguage] = useState(currentLang);
@@ -220,7 +220,7 @@ export default function SignUpScreen({ navigation }: Props) {
                                 <TextInput
                                     style={styles.searchInput}
                                     placeholder={t('search') || "Search"}
-                                    placeholderTextColor="#999"
+                                    placeholderTextColor="#94A3B8"
                                     value={searchText}
                                     onChangeText={setSearchText}
                                 />
@@ -244,7 +244,7 @@ export default function SignUpScreen({ navigation }: Props) {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
@@ -279,7 +279,7 @@ export default function SignUpScreen({ navigation }: Props) {
                                     nameError && { borderColor: '#EF4444', borderWidth: 1.5 }
                                 ]}
                                 placeholder={t('full_name')}
-                                placeholderTextColor="#999"
+                                placeholderTextColor="#94A3B8"
                                 value={fullName}
                                 onChangeText={(text) => {
                                     setFullName(text);
@@ -297,7 +297,7 @@ export default function SignUpScreen({ navigation }: Props) {
                                     passportError && { borderColor: '#EF4444', borderWidth: 1.5 }
                                 ]}
                                 placeholder={t('passport_label')}
-                                placeholderTextColor="#999"
+                                placeholderTextColor="#94A3B8"
                                 value={passportNumber}
                                 onChangeText={(text) => {
                                     setPassportNumber(text);
@@ -327,7 +327,7 @@ export default function SignUpScreen({ navigation }: Props) {
                                         phoneError && { borderColor: '#EF4444', borderWidth: 1.5 }
                                     ]}
                                     placeholder="50 123 4567"
-                                    placeholderTextColor="#999"
+                                    placeholderTextColor="#94A3B8"
                                     value={phoneNumber}
                                     onChangeText={(text) => {
                                         setPhoneNumber(text);
@@ -345,20 +345,25 @@ export default function SignUpScreen({ navigation }: Props) {
 
                         <View style={styles.inputWrapper}>
                             <Text style={styles.label}>{t('password_placeholder')} *</Text>
-                            <TextInput
-                                style={[
-                                    styles.input,
-                                    passwordError && { borderColor: '#EF4444', borderWidth: 1.5 }
-                                ]}
-                                placeholder={t('password_placeholder')}
-                                placeholderTextColor="#999"
-                                value={password}
-                                onChangeText={(text) => {
-                                    setPassword(text);
-                                    if (passwordError) setPasswordError(false);
-                                }}
-                                secureTextEntry
-                            />
+                            <View style={[styles.passwordContainer, passwordError && { borderColor: '#EF4444', borderWidth: 1.5 }]}>
+                                <TextInput
+                                    style={styles.passwordInput}
+                                    placeholder={t('password_placeholder')}
+                                    placeholderTextColor="#94A3B8"
+                                    value={password}
+                                    onChangeText={(text) => {
+                                        setPassword(text);
+                                        if (passwordError) setPasswordError(false);
+                                    }}
+                                    secureTextEntry={!showPassword}
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeIcon}
+                                    onPress={() => setShowPassword(!showPassword)}
+                                >
+                                    <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#999" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         <View style={styles.inputWrapper}>
@@ -366,7 +371,7 @@ export default function SignUpScreen({ navigation }: Props) {
                             <TextInput
                                 style={styles.input}
                                 placeholder={t('email_address_placeholder')}
-                                placeholderTextColor="#999"
+                                placeholderTextColor="#94A3B8"
                                 value={email}
                                 onChangeText={setEmail}
                                 autoCapitalize="none"
@@ -379,7 +384,7 @@ export default function SignUpScreen({ navigation }: Props) {
                             <TextInput
                                 style={[styles.input, styles.textArea]}
                                 placeholder={t('medical_history')}
-                                placeholderTextColor="#999"
+                                placeholderTextColor="#94A3B8"
                                 value={medicalHistory}
                                 onChangeText={setMedicalHistory}
                                 multiline
@@ -420,7 +425,7 @@ export default function SignUpScreen({ navigation }: Props) {
                     <Text style={[styles.pickerItemText, { fontSize: 14, opacity: 0.5 }]}>{item.name}</Text>
                 </View>
             ), true)}
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -478,6 +483,29 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 2,
+    },
+    passwordContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E1E1E1',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    passwordInput: {
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        fontSize: 16,
+        color: '#333',
+    },
+    eyeIcon: {
+        padding: 12,
     },
     phoneInputContainer: {
         flexDirection: 'row',

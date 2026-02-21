@@ -230,9 +230,9 @@ export default function ComposeMessageModal({
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                <View style={styles.container}>
+                <View style={[styles.container, { paddingHorizontal: 16 }]}>
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                         keyboardVerticalOffset={0}
                         style={styles.keyboardView}
                     >
@@ -257,6 +257,7 @@ export default function ComposeMessageModal({
                                 <ScrollView
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={false}
+                                    bounces={false}
                                 >
                                     {/* Mode tabs */}
                                     <View style={styles.tabs}>
@@ -373,7 +374,7 @@ export default function ComposeMessageModal({
                     </KeyboardAvoidingView>
                 </View>
             </TouchableWithoutFeedback>
-        </Modal>
+        </Modal >
     );
 }
 
@@ -381,20 +382,16 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: 'rgba(15, 23, 42, 0.5)',
-        justifyContent: 'flex-end',
+        justifyContent: 'center',
     },
     keyboardView: {
         width: '100%',
     },
     content: {
         backgroundColor: 'white',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
+        borderRadius: 24,
         padding: 20,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-        minHeight: 400,
+        paddingBottom: 24,
     },
     handleBar: {
         width: 36,

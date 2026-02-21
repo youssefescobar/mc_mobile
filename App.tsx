@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from './src/services/NotificationService';
@@ -48,12 +49,16 @@ function AppContent() {
 
 export default function App() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ToastProvider>
-        <CallProvider>
-          <AppContent />
-        </CallProvider>
-      </ToastProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <ToastProvider>
+            <CallProvider>
+              <AppContent />
+            </CallProvider>
+          </ToastProvider>
+        </GestureHandlerRootView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

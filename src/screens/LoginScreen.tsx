@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, KeyboardAvoidingView, Platform, Dimensions, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, KeyboardAvoidingView, Platform, Dimensions, Keyboard, TouchableWithoutFeedback, ScrollView, Animated } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { api, setAuthToken, updateFCMToken } from '../services/api';
 import { registerForPushNotificationsAsync } from '../services/NotificationService';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useToast } from '../components/ToastContext';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +17,38 @@ export default function LoginScreen({ navigation }: Props) {
     const { t, i18n } = useTranslation();
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const { showToast } = useToast();
+
+    // Animated Placeholder Logic
+    const placeholders = [
+        'example@gmail.com',
+        '+966500000000',
+        'A12345678 (Passport)'
+    ];
+    const [placeholderIndex, setPlaceholderIndex] = useState(0);
+    const fadeAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // Fade out
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 400,
+                useNativeDriver: true,
+            }).start(() => {
+                setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
+                // Fade in
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }).start();
+            });
+        }, 3000);
+        return () => clearInterval(interval);
+    }, []);
 
     const handleLogin = async () => {
         const cleanIdentifier = identifier.trim();
@@ -70,7 +100,7 @@ export default function LoginScreen({ navigation }: Props) {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
@@ -96,26 +126,47 @@ export default function LoginScreen({ navigation }: Props) {
                             <View style={styles.formContainer}>
                                 <View style={styles.inputWrapper}>
                                     <Text style={styles.label}>{t('email_placeholder')}</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder={t('email_placeholder')}
-                                        placeholderTextColor="#999"
-                                        value={identifier}
-                                        onChangeText={setIdentifier}
-                                        autoCapitalize="none"
-                                    />
+                                    <View style={{ justifyContent: 'center' }}>
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder=""
+                                            placeholderTextColor="transparent"
+                                            value={identifier}
+                                            onChangeText={setIdentifier}
+                                            autoCapitalize="none"
+                                        />
+                                        {!identifier && (
+                                            <Animated.Text
+                                                style={[
+                                                    styles.animatedPlaceholder,
+                                                    { opacity: fadeAnim }
+                                                ]}
+                                                pointerEvents="none"
+                                            >
+                                                {placeholders[placeholderIndex]}
+                                            </Animated.Text>
+                                        )}
+                                    </View>
                                 </View>
 
                                 <View style={styles.inputWrapper}>
                                     <Text style={styles.label}>{t('password_placeholder')}</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder="••••••••"
-                                        placeholderTextColor="#999"
-                                        value={password}
-                                        onChangeText={setPassword}
-                                        secureTextEntry
-                                    />
+                                    <View style={styles.passwordContainer}>
+                                        <TextInput
+                                            style={styles.passwordInput}
+                                            placeholder="••••••••"
+                                            placeholderTextColor="#94A3B8"
+                                            value={password}
+                                            onChangeText={setPassword}
+                                            secureTextEntry={!showPassword}
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.eyeIcon}
+                                            onPress={() => setShowPassword(!showPassword)}
+                                        >
+                                            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#999" />
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
 
                                 <TouchableOpacity
@@ -147,12 +198,12 @@ export default function LoginScreen({ navigation }: Props) {
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                            <View style={{ height: 30 }} />
+                            <View style={{ height: 80 }} />
                         </View>
                     </TouchableWithoutFeedback>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -168,8 +219,8 @@ const styles = StyleSheet.create({
     },
     headerContainer: {
         alignItems: 'center',
-        marginBottom: 40,
-        marginTop: 60,
+        marginBottom: 30,
+        marginTop: 10,
     },
     logo: {
         width: 100,
@@ -221,6 +272,35 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 2,
+    },
+    passwordContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E1E1E1',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    passwordInput: {
+        flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        fontSize: 16,
+        color: '#333',
+    },
+    eyeIcon: {
+        padding: 14,
+    },
+    animatedPlaceholder: {
+        position: 'absolute',
+        left: 16,
+        color: '#94A3B8',
+        fontSize: 16,
     },
     loginButton: {
         backgroundColor: '#007AFF',

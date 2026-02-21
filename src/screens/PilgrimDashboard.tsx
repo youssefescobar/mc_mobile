@@ -429,7 +429,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
 
             {/* Header overlay */}
-            <SafeAreaView style={styles.header} edges={['top']} pointerEvents="box-none">
+            <View style={styles.header} pointerEvents="box-none">
                 <View style={[styles.headerContent, { flexDirection: 'column', alignItems: isRTL ? 'flex-end' : 'flex-start', gap: 12 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <TouchableOpacity
@@ -462,7 +462,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                         </Animated.View>
                     </TouchableOpacity>
                 </View>
-            </SafeAreaView>
+            </View>
 
             {/* Bottom sheet */}
             <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}>
@@ -638,8 +638,8 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         paddingHorizontal: 16,
-        paddingTop: 20,
-        paddingBottom: 50, // Moved up from 34
+        paddingTop: 12,
+        paddingBottom: 4,
         backgroundColor: 'white',
         borderTopLeftRadius: 28,
         borderTopRightRadius: 28,

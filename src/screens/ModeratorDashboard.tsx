@@ -281,7 +281,7 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
     return (
         <View style={styles.container}>
             {/* Header */}
-            <SafeAreaView style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]} edges={['top']}>
+            <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
                 <View style={isRTL && { alignItems: 'flex-end' }}>
                     <Text style={styles.headerTitle}>{t('dashboard')}</Text>
                     <Text style={styles.headerSubtitle}>{t('welcome_back')}{profile?.full_name ? `, ${profile.full_name}` : ''}</Text>
@@ -322,7 +322,7 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                         <Ionicons name="person-circle-outline" size={32} color="#666" />
                     </TouchableOpacity>
                 </View>
-            </SafeAreaView>
+            </View>
 
             {/* Profile Modal */}
             <Modal
@@ -809,7 +809,7 @@ const styles = StyleSheet.create({
     },
     fab: {
         position: 'absolute',
-        bottom: 90,
+        bottom: 30,
         right: 20,
         backgroundColor: '#2563EB',
         width: 60,

@@ -314,5 +314,7 @@
     "time_ago_m": "m ago",
     "time_ago_h": "h ago",
     "time_ago_d": "d ago",
-    "default_group_name": "Group"
+    "default_group_name": "Group",
+    "your_location": "Your Location",
+    "location_not_available": "Location not available. Please wait a bit or ensure your GPS is turned on."
 }

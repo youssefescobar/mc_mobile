@@ -132,7 +132,7 @@ export default function Toast({
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        top: 50,
+        top: 10,
         left: 20,
         right: 20,
         maxWidth: width - 40,

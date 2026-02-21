@@ -316,7 +316,7 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, isRTL && { marginRight: 0, marginLeft: 16 }]}>
                     <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={24} color="#0F172A" />
@@ -344,7 +344,7 @@ export default function PilgrimMessagesScreen({ route, navigation }: Props) {
                     }
                 />
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     },
     list: {
         paddingHorizontal: 16,
-        paddingBottom: 32,
+        paddingBottom: 20,
         paddingTop: 16,
     },
     loader: {
