@@ -106,14 +106,9 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
     const { startCall } = useCall();
 
-    // Legacy Call State & Effect removed. CallContext handles this now.
-
     // Initial setup & Background interval
     useEffect(() => {
-        // Send initial location
         getCurrentLocation();
-
-        // Set up 5-minute interval for normal updates
         locationIntervalRef.current = setInterval(() => {
             if (!sosActive) getCurrentLocation();
         }, 5 * 60 * 1000);
@@ -122,15 +117,14 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
             if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
             if (locationSubscription) locationSubscription.remove();
         };
-    }, [sosActive]); // Re-run if SOS state changes (though logic handles it)
+    }, [sosActive]);
 
-    // SOS Mode: Real-time tracking
     useEffect(() => {
         if (sosActive) {
             startRealTimeTracking();
         } else {
             stopRealTimeTracking();
-            getCurrentLocation(); // Send one last update or revert to normal
+            getCurrentLocation();
         }
     }, [sosActive]);
 
@@ -140,51 +134,24 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
             fetchNotifications();
             fetchMissedCallCount();
             setupLocationTracking();
-
-            // Debug: Check what's in AsyncStorage
-            const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-            const storedUserId = await AsyncStorage.getItem('user_id');
-            console.log('[PilgrimDashboard] Stored user_id in AsyncStorage:', storedUserId);
-
-            // Register user for calls after connection with a delay
             setTimeout(async () => {
                 await socketService.registerUser();
             }, 1000);
         };
-
         initializeScreen();
-
-        return () => {
-            // socketService.disconnect(); // Keep connected?
-        };
     }, []);
 
-    // Animations
     useEffect(() => {
-        // Start SOS pulse animation
         Animated.loop(
             Animated.sequence([
-                Animated.timing(pulseAnim, {
-                    toValue: 1.2,
-                    duration: 1000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(pulseAnim, {
-                    toValue: 1,
-                    duration: 1000,
-                    useNativeDriver: true,
-                }),
+                Animated.timing(pulseAnim, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
             ])
         ).start();
 
-        Animated.timing(sheetAnim, {
-            toValue: 0,
-            duration: 450,
-            useNativeDriver: true,
-        }).start();
+        Animated.timing(sheetAnim, { toValue: 0, duration: 450, useNativeDriver: true }).start();
     }, []);
 
-    // Refresh data when screen comes into focus
     useFocusEffect(
         React.useCallback(() => {
             if (!groupInfo) fetchGroupInfo();
@@ -193,50 +160,33 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         }, [groupInfo])
     );
 
-    // Poll for unread messages when we have a group
     useEffect(() => {
         if (!groupInfo) return;
-
         const joinGroupValues = async () => {
-            // Ensure socket is connected before joining
             if (!socketService.socket?.connected) {
                 await socketService.connect();
-                // Give it a moment to connect
                 await new Promise(r => setTimeout(r, 1000));
             }
             socketService.joinGroup(groupInfo.group_id);
             fetchUnreadCount(groupInfo.group_id);
         };
-
         joinGroupValues();
 
         const handleNewMessage = (msg: any) => {
             if (msg.group_id === groupInfo.group_id) {
-                // Determine if message is for us (broadcast or direct)
                 const isForMe = !msg.recipient_id || msg.recipient_id === route.params.userId;
                 if (isForMe && msg.sender_id._id !== route.params.userId) {
                     setUnreadCount(prev => prev + 1);
                 }
             }
         };
-
         socketService.onNewMessage(handleNewMessage);
-
-        // Also listen for reconnect to rejoin group
-        const handleReconnect = () => {
-            console.log('[PilgrimDashboard] Reconnected, re-joining group');
-            socketService.joinGroup(groupInfo.group_id);
-        };
-        socketService.socket?.on('reconnect', handleReconnect);
-
         return () => {
             socketService.offNewMessage(handleNewMessage);
             socketService.leaveGroup(groupInfo.group_id);
-            socketService.socket?.off('reconnect', handleReconnect);
         };
     }, [groupInfo]);
 
-    // Fetch suggested areas when group is known
     useEffect(() => {
         if (!groupInfo) return;
         const fetchAreas = async () => {
@@ -266,31 +216,10 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
         }
     };
 
-    const setupBatteryListener = async () => {
-        try {
-            const level = await Battery.getBatteryLevelAsync();
-            setBatteryLevel(Math.round(level * 100));
-
-            Battery.addBatteryLevelListener(({ batteryLevel }) => {
-                setBatteryLevel(Math.round(batteryLevel * 100));
-            });
-        } catch (e) {
-            console.log('Battery API not available');
-            setBatteryLevel(100); // Default to 100 on simulator
-        }
-    };
-
-    const lastLocationUpdate = useRef<number>(0);
-
     const handleLocationUpdate = async (location: Location.LocationObject) => {
         if (!isSharingLocation) return;
-
         const now = Date.now();
-        // Throttle updates to once every 30 seconds for API calls
-        // Socket updates can be more frequent if needed, but let's sync them for consistency/battery
-        const shouldUpdate = now - lastLocationUpdate.current > 30000;
-
-        if (!shouldUpdate) return;
+        if (now - lastLocationUpdate.current < 30000) return;
 
         try {
             lastLocationUpdate.current = now;
@@ -298,7 +227,6 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
             const batteryPercent = Math.round(level * 100);
             setBatteryLevel(batteryPercent);
 
-            // Fire API call
             await api.put('/pilgrim/location', {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
@@ -314,34 +242,25 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                     isSos: sosActive
                 });
             }
-        } catch (e) {
-            // Silent error for location updates
-        }
+        } catch (e) { }
     };
+
+    const lastLocationUpdate = useRef<number>(0);
 
     const getCurrentLocation = async () => {
         if (!isSharingLocation) return;
         try {
             const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            // Force update for initial load or manual triggers
             lastLocationUpdate.current = 0;
             handleLocationUpdate(location);
-        } catch (e) {
-            console.log('Error getting current location', e);
-        }
+        } catch (e) { }
     };
-
 
     const startRealTimeTracking = async () => {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
-
         const sub = await Location.watchPositionAsync(
-            {
-                accuracy: Location.Accuracy.High,
-                timeInterval: 5000,
-                distanceInterval: 10,
-            },
+            { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
             handleLocationUpdate
         );
         setLocationSubscription(sub);
@@ -355,18 +274,10 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
     };
 
     const handleSOS = async () => {
-        Alert.alert(
-            t('sos_lost'),
-            t('sos_confirmation'),
-            [
-                { text: t('cancel'), style: "cancel" },
-                {
-                    text: t('send_alert'),
-                    style: "destructive",
-                    onPress: sendSOS
-                }
-            ]
-        );
+        Alert.alert(t('sos_lost'), t('sos_confirmation'), [
+            { text: t('cancel'), style: "cancel" },
+            { text: t('send_alert'), style: "destructive", onPress: sendSOS }
+        ]);
     };
 
     const sendSOS = async () => {
@@ -377,7 +288,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                 socketService.sendSOS({
                     groupId: groupInfo.group_id,
                     pilgrimId: route.params.userId,
-                    lat: 0, // Should get current loc?
+                    lat: 0,
                     lng: 0,
                     message: "SOS Alert"
                 });
@@ -426,41 +337,41 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                 />
             </View>
 
-
-
             {/* Header overlay */}
             <View style={styles.header} pointerEvents="box-none">
-                <View style={[styles.headerContent, { flexDirection: 'column', alignItems: isRTL ? 'flex-end' : 'flex-start', gap: 12 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <TouchableOpacity
-                            style={styles.profileButton}
-                            onPress={() => navigation.navigate('PilgrimProfile', { userId: route.params.userId })}
-                        >
-                            <Ionicons name="person-circle-outline" size={28} color="#0F172A" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.profileButton, { marginLeft: 12 }]}
-                            onPress={() => navigation.navigate('CallHistory')}
-                        >
-                            <Ionicons name="call-outline" size={24} color="#0F172A" />
-                            {missedCallCount > 0 && (
-                                <View style={styles.badge}>
-                                    <Text style={styles.badgeText}>
-                                        {missedCallCount > 9 ? '9+' : missedCallCount}
-                                    </Text>
-                                </View>
-                            )}
+                <View style={styles.headerContent} pointerEvents="box-none">
+                    <View style={styles.headerLeft} pointerEvents="box-none">
+                        <View style={styles.iconGroup}>
+                            <TouchableOpacity
+                                style={styles.profileButton}
+                                onPress={() => navigation.navigate('PilgrimProfile', { userId: route.params.userId })}
+                            >
+                                <Ionicons name="person-circle-outline" size={28} color="#0F172A" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.profileButton}
+                                onPress={() => navigation.navigate('CallHistory')}
+                            >
+                                <Ionicons name="call-outline" size={24} color="#0F172A" />
+                                {missedCallCount > 0 && (
+                                    <View style={styles.badge}>
+                                        <Text style={styles.badgeText}>
+                                            {missedCallCount > 9 ? '9+' : missedCallCount}
+                                        </Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity onPress={handleSOS} activeOpacity={0.8} style={{ marginTop: 12 }}>
+                            <Animated.View style={[
+                                styles.sosButton,
+                                sosActive && { transform: [{ scale: pulseAnim }] }
+                            ]}>
+                                <Ionicons name="warning" size={16} color="white" style={{ marginRight: 6 }} />
+                                <Text style={styles.sosText}>{t('sos')}</Text>
+                            </Animated.View>
                         </TouchableOpacity>
                     </View>
-                    <TouchableOpacity onPress={handleSOS} activeOpacity={0.8}>
-                        <Animated.View style={[
-                            styles.sosButton,
-                            sosActive && { transform: [{ scale: pulseAnim }] }
-                        ]}>
-                            <Ionicons name="warning" size={16} color="white" style={{ marginRight: 6 }} />
-                            <Text style={styles.sosText}>{t('sos')}</Text>
-                        </Animated.View>
-                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -476,17 +387,17 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                     </TouchableOpacity>
                 )}
 
-                <View style={[styles.statusRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                    <View style={[styles.statusChip, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                <View style={styles.statusRow}>
+                    <View style={styles.statusChip}>
                         <Ionicons name="location-outline" size={18} color="#0F766E" />
-                        <View style={{ alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+                        <View>
                             <Text style={styles.chipLabel}>{t('location')}</Text>
                             <Text style={styles.chipValue}>{t('active')}</Text>
                         </View>
                     </View>
-                    <View style={[styles.statusChip, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                    <View style={styles.statusChip}>
                         <Ionicons name={getBatteryIcon(batteryLevel)} size={18} color="#1E3A8A" />
-                        <View style={{ alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+                        <View>
                             <Text style={styles.chipLabel}>{t('battery')}</Text>
                             <Text style={styles.chipValue}>{batteryLevel !== null ? `${batteryLevel}%` : '--'}</Text>
                         </View>
@@ -495,11 +406,11 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
                 {groupInfo && (
                     <View style={styles.groupCard}>
-                        <View style={[styles.groupHeaderRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+                        <View style={styles.groupHeaderRow}>
                             <View style={styles.groupIconCircle}>
                                 <Ionicons name="people" size={16} color="#2563EB" />
                             </View>
-                            <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+                            <View style={{ flex: 1 }}>
                                 <Text style={styles.groupName}>{groupInfo.group_name}</Text>
                                 <Text style={styles.moderatorLabel}>
                                     {t('led_by')} <Text style={styles.moderatorName}>{groupInfo.moderators[0]?.full_name || t('assigned')}</Text>
@@ -507,14 +418,14 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                             </View>
                         </View>
                         <TouchableOpacity
-                            style={[styles.messageButton, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                            style={styles.messageButton}
                             onPress={() => navigation.navigate('PilgrimMessagesScreen', {
                                 groupId: groupInfo.group_id,
                                 groupName: groupInfo.group_name,
                                 userId: route.params.userId
                             })}
                         >
-                            <Ionicons name="chatbubbles-outline" size={16} color="#2563EB" style={{ marginRight: 8, marginLeft: isRTL ? 8 : 0 }} />
+                            <Ionicons name="chatbubbles-outline" size={16} color="#2563EB" style={{ marginRight: 8 }} />
                             <Text style={styles.messageButtonText}>{t('broadcasts_updates')}</Text>
                             {unreadCount > 0 && (
                                 <View style={styles.unreadBadge}>
@@ -522,27 +433,27 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                                 </View>
                             )}
                         </TouchableOpacity>
+
                         {groupInfo.allow_pilgrim_navigation && groupInfo.moderators[0]?.current_latitude && groupInfo.moderators[0]?.current_longitude && (
                             <TouchableOpacity
-                                style={[styles.navigateModButton, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                                style={styles.navigateModButton}
                                 onPress={() => openNavigation(
                                     groupInfo.moderators[0].current_latitude!,
                                     groupInfo.moderators[0].current_longitude!,
                                     groupInfo.moderators[0].full_name
                                 )}
                             >
-                                <Ionicons name="navigate-outline" size={16} color="white" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
+                                <Ionicons name="navigate-outline" size={16} color="white" style={{ marginRight: 8 }} />
                                 <Text style={styles.navigateModButtonText}>{t('navigate_to_moderator')}</Text>
                             </TouchableOpacity>
                         )}
 
-
                         {groupInfo && groupInfo.moderators.length > 0 && (
                             <TouchableOpacity
-                                style={[styles.callModButton, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                                style={styles.callModButton}
                                 onPress={() => startCall(groupInfo.moderators[0]._id, groupInfo.moderators[0].full_name)}
                             >
-                                <Ionicons name="call" size={16} color="white" style={{ marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }} />
+                                <Ionicons name="call" size={16} color="white" style={{ marginRight: 8 }} />
                                 <Text style={styles.navigateModButtonText}>{t('call_moderator')}</Text>
                             </TouchableOpacity>
                         )}
@@ -552,26 +463,24 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                             <View style={styles.suggestedSection}>
                                 <Text style={[styles.suggestedTitle, { textAlign: isRTL ? 'right' : 'left' }]}>📍 {t('suggested_areas')}</Text>
                                 {suggestedAreas.map(area => (
-                                    <View key={area._id} style={[styles.suggestedRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                                        <View style={{ flex: 1, alignItems: isRTL ? 'flex-end' : 'flex-start' }}>
+                                    <View key={area._id} style={styles.suggestedRow}>
+                                        <View style={{ flex: 1 }}>
                                             <Text style={styles.suggestedName}>{area.name}</Text>
                                             {area.description ? <Text style={styles.suggestedDesc}>{area.description}</Text> : null}
                                         </View>
                                         <TouchableOpacity
-                                            style={[styles.navigateAreaBtn, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+                                            style={styles.navigateAreaBtn}
                                             onPress={() => openNavigation(area.latitude, area.longitude, area.name)}
                                         >
-                                            <Ionicons name="navigate-outline" size={14} color="white" style={{ marginRight: isRTL ? 0 : 4, marginLeft: isRTL ? 4 : 0 }} />
+                                            <Ionicons name="navigate-outline" size={14} color="white" style={{ marginRight: 4 }} />
                                             <Text style={styles.navigateAreaText}>{t('navigate_to_area')}</Text>
                                         </TouchableOpacity>
                                     </View>
                                 ))}
                             </View>
-
                         )}
                     </View>
                 )}
-
             </Animated.View>
         </View>
     );
@@ -584,7 +493,7 @@ const styles = StyleSheet.create({
     },
     header: {
         position: 'absolute',
-        top: 0,
+        top: 8,
         left: 0,
         right: 0,
         zIndex: 10,
@@ -595,6 +504,14 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingTop: 8,
+    },
+    headerLeft: {
+        alignItems: 'flex-start',
+    },
+    iconGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
     },
     profileButton: {
         width: 42,
@@ -776,6 +693,20 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 4,
     },
+    callModButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#2563EB',
+        borderRadius: 12,
+        paddingVertical: 12,
+        marginTop: 8,
+        elevation: 2,
+        shadowColor: '#1E40AF',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+    },
     navigateModButtonText: {
         color: 'white',
         fontSize: 14,
@@ -798,64 +729,49 @@ const styles = StyleSheet.create({
     badgeText: {
         color: 'white',
         fontSize: 10,
-        fontWeight: 'bold',
-    },
-
-    callModButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#2563EB',
-        borderRadius: 12,
-        paddingVertical: 12,
-        marginTop: 12,
-        elevation: 2,
-        shadowColor: '#2563EB',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
+        fontWeight: '700',
     },
     suggestedSection: {
-        marginTop: 14,
+        marginTop: 20,
+        paddingTop: 16,
         borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
-        paddingTop: 12,
+        borderTopColor: '#F1F5F9',
     },
     suggestedTitle: {
         fontSize: 14,
         fontWeight: '700',
-        color: '#334155',
-        marginBottom: 8,
+        color: '#64748B',
+        marginBottom: 12,
     },
     suggestedRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
+        justifyContent: 'space-between',
+        paddingVertical: 10,
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
     },
     suggestedName: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
-        color: '#1E293B',
+        color: '#0F172A',
     },
     suggestedDesc: {
-        fontSize: 11,
-        color: '#64748B',
+        fontSize: 12,
+        color: '#94A3B8',
         marginTop: 2,
     },
     navigateAreaBtn: {
         flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F59E0B',
-        borderRadius: 8,
+        backgroundColor: '#2563EB',
+        paddingHorizontal: 12,
         paddingVertical: 6,
-        paddingHorizontal: 10,
-        marginLeft: 8,
+        borderRadius: 8,
+        alignItems: 'center',
     },
     navigateAreaText: {
         color: 'white',
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 11,
+        fontWeight: '700',
     },
 });
