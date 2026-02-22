@@ -1,16 +1,17 @@
 import React, { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
-import { Alert, Vibration } from 'react-native';
+import { Alert, AppState, Vibration } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CallModal from '../components/CallModal';
 import { socketService } from '../services/socket';
 import InCallManager from 'react-native-incall-manager';
 import notifee from '@notifee/react-native';
+import { showIncomingCallNotification, dismissCallNotification } from '../services/BackgroundNotificationTask';
 
 // WebRTC imports (conditional for expo go)
 let mediaDevices: any = null;
 let RTCPeerConnection: any = null;
 let RTCSessionDescription: any = null;
 let RTCIceCandidate: any = null;
-let MediaStream: any = null;
 let webrtcAvailable = false;
 
 try {
@@ -19,7 +20,6 @@ try {
     RTCPeerConnection = webrtc.RTCPeerConnection;
     RTCSessionDescription = webrtc.RTCSessionDescription;
     RTCIceCandidate = webrtc.RTCIceCandidate;
-    MediaStream = webrtc.MediaStream;
     webrtcAvailable = true;
 } catch (e) {
     console.log('[CallContext] WebRTC not available (Expo Go?)');
@@ -47,9 +47,7 @@ const CallContext = createContext<CallContextType | undefined>(undefined);
 
 export const useCall = () => {
     const context = useContext(CallContext);
-    if (!context) {
-        throw new Error('useCall must be used within a CallProvider');
-    }
+    if (!context) throw new Error('useCall must be used within a CallProvider');
     return context;
 };
 
@@ -69,26 +67,43 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [localStream, setLocalStream] = useState<any>(null);
     const [remoteStream, setRemoteStream] = useState<any>(null);
 
-    // WebRTC connection state refs
+    // Call state refs — used in event handlers (closures) to avoid stale state
+    const pendingOffer = useRef<any>(null);
     const remoteDescriptionSet = useRef(false);
     const iceCandidateQueue = useRef<any[]>([]);
-    const pendingOffer = useRef<any>(null);
+    // Mirrors callState.remoteUser so answerCall/declineCall always have the current value
+    const remoteUserRef = useRef<{ id: string; name: string; role?: string } | null>(null);
 
-    // Socket listeners setup
+    // Guard: prevents double-handling a single call offer (socket + FCM race)
+    const isHandlingCall = useRef(false);
+
+    // ── Socket event handlers (mount once, use refs for state) ─────────────────
     useEffect(() => {
-        // We no longer rely on getSocket() being non-null here.
-        // socketService will queue these listeners if socket isn't ready.
-
-        const handleCallOffer = async ({ offer, from, callerInfo }: { offer: any; from: string; callerInfo?: { id: string; name: string; role: string } }) => {
-            // Check if already in a call
-            if (callState.isActive || callState.isIncoming || callState.isOutgoing) {
-                console.log('Received call offer while busy');
+        const handleCallOffer = async ({
+            offer,
+            from,
+            callerInfo,
+        }: {
+            offer: any;
+            from: string;
+            callerInfo?: { id: string; name: string; role: string };
+        }) => {
+            // Deduplication guard — ignore if already handling a call
+            if (isHandlingCall.current) {
+                console.log('[CallContext] Already handling a call — ignoring duplicate call-offer');
                 socketService.getSocket()?.emit('call-busy', { to: from });
                 return;
             }
 
-            console.log('Incoming call from:', from, callerInfo);
+            console.log('[CallContext] Incoming call-offer from:', from, callerInfo);
+
+            isHandlingCall.current = true;
             const resolvedCaller = callerInfo || { id: from, name: 'Caller', role: 'Unknown' };
+
+            pendingOffer.current = offer;
+            remoteDescriptionSet.current = false;
+            iceCandidateQueue.current = [];
+            remoteUserRef.current = resolvedCaller;
 
             setCallState({
                 isActive: false,
@@ -99,101 +114,157 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 remoteUser: resolvedCaller,
             });
 
-            pendingOffer.current = offer;
-            remoteDescriptionSet.current = false; // Reset for new call
-            iceCandidateQueue.current = [];
+            // If app is backgrounded, show a Notifee notification so the user
+            // can Answer / Decline without opening the app first.
+            // When the app is in the foreground, the CallModal will appear instead.
+            const appState = AppState.currentState;
+            if (appState !== 'active') {
+                console.log('[CallContext] App is backgrounded — showing Notifee incoming call notification');
+                try {
+                    await showIncomingCallNotification(
+                        resolvedCaller.name,
+                        resolvedCaller.role,
+                        resolvedCaller.id,
+                        typeof offer === 'string' ? offer : JSON.stringify(offer)
+                    );
+                } catch (e) {
+                    console.error('[CallContext] Failed to show Notifee notification:', e);
+                }
+            }
         };
 
         const handleCallAnswer = async ({ answer }: { answer: any }) => {
-            if (pc.current && callState.isOutgoing) {
-                try {
-                    await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
-                    remoteDescriptionSet.current = true;
+            if (!pc.current) return;
 
-                    // Process queued candidates
-                    if (iceCandidateQueue.current.length > 0) {
-                        console.log(`[CallContext] Processing ${iceCandidateQueue.current.length} queued candidates`);
-                        for (const candidate of iceCandidateQueue.current) {
-                            try {
-                                await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
-                            } catch (e) {
-                                console.error('Error adding queued ice candidate:', e);
-                            }
-                        }
-                        iceCandidateQueue.current = [];
+            // Guard: only process answer when we're in have-local-offer state.
+            // This prevents the "Called in wrong state: stable" error caused by
+            // stale duplicate listeners firing a second time after the call is established.
+            const sigState = pc.current.signalingState;
+            if (sigState !== 'have-local-offer') {
+                console.log(`[CallContext] Ignoring call-answer in wrong signaling state: ${sigState}`);
+                return;
+            }
+            try {
+                await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
+                remoteDescriptionSet.current = true;
+
+                for (const candidate of iceCandidateQueue.current) {
+                    try {
+                        await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
+                    } catch (e) {
+                        console.error('[CallContext] Error adding queued ice candidate:', e);
                     }
-
-                    setCallState(prev => ({ ...prev, isActive: true, isOutgoing: false, isIncoming: false, callStatus: 'connected' }));
-                } catch (e) {
-                    console.error('Error setting remote description:', e);
                 }
+                iceCandidateQueue.current = [];
+
+                setCallState(prev => ({
+                    ...prev,
+                    isActive: true,
+                    isOutgoing: false,
+                    isIncoming: false,
+                    callStatus: 'connected',
+                }));
+            } catch (e) {
+                console.error('[CallContext] Error setting remote description:', e);
             }
         };
 
         const handleIceCandidate = async ({ candidate }: { candidate: any }) => {
             if (pc.current) {
                 if (!remoteDescriptionSet.current) {
-                    console.log('[CallContext] Queueing ICE candidate (remote description not set)');
                     iceCandidateQueue.current.push(candidate);
                 } else {
                     try {
                         await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
                     } catch (e) {
-                        console.error('Error adding ice candidate:', e);
+                        console.error('[CallContext] Error adding ice candidate:', e);
                     }
                 }
             }
         };
 
         const handleCallEnd = () => {
+            console.log('[CallContext] Received call-end');
             cleanupCall();
         };
 
         const handleCallBusy = () => {
-            console.log('Call declined - user is busy');
+            console.log('[CallContext] Call busy');
             setCallState(prev => ({ ...prev, callStatus: 'declined', isOutgoing: false }));
-            setTimeout(() => cleanupCall(), 2000); // Show "declined" for 2 seconds
+            setTimeout(() => cleanupCall(), 2000);
         };
 
         const handleCallDeclined = () => {
-            console.log('Call declined by user');
+            console.log('[CallContext] Call declined');
             setCallState(prev => ({ ...prev, callStatus: 'declined', isOutgoing: false }));
             setTimeout(() => cleanupCall(), 2000);
+        };
+
+        // call-cancel: caller hung up while ringing — dismiss notification + cleanup
+        const handleCallCancel = () => {
+            console.log('[CallContext] Call cancelled by caller');
+            dismissCallNotification();
+            cleanupCall();
         };
 
         socketService.onCallOffer(handleCallOffer);
         socketService.onCallAnswer(handleCallAnswer);
         socketService.onIceCandidate(handleIceCandidate);
         socketService.onCallEnd(handleCallEnd);
-
-        // Listen for busy/declined events
-        const socket = socketService.getSocket();
-        if (socket) {
-            socket.on('call-busy', handleCallBusy);
-            socket.on('call-declined', handleCallDeclined);
-        }
+        // These three use the queue-aware wrappers so they register even if
+        // socket is null at mount time (which it almost always is).
+        socketService.onCallBusy(handleCallBusy);
+        socketService.onCallDeclined(handleCallDeclined);
+        socketService.onCallCancel(handleCallCancel);
 
         return () => {
             socketService.offCallOffer(handleCallOffer);
             socketService.offCallAnswer(handleCallAnswer);
             socketService.offIceCandidate(handleIceCandidate);
             socketService.offCallEnd(handleCallEnd);
-
-            const socket = socketService.getSocket();
-            if (socket) {
-                socket.off('call-busy', handleCallBusy);
-                socket.off('call-declined', handleCallDeclined);
-            }
+            socketService.offCallBusy(handleCallBusy);
+            socketService.offCallDeclined(handleCallDeclined);
+            socketService.offCallCancel(handleCallCancel);
         };
-    }, [callState.isActive, callState.isIncoming, callState.isOutgoing]);
+    }, []); // ← mount once — handlers use refs, NOT state
+
+    // ── Background decline recovery ────────────────────────────────────────────
+    // When the user taps "Decline" on a Notifee notification while the app is
+    // backgrounded, the background event handler (index.ts) stores DECLINED_CALL
+    // in AsyncStorage but cannot reset CallContext state (different execution context).
+    // This effect watches for the app returning to foreground and cleans up.
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', async (nextState) => {
+            if (nextState === 'active') {
+                try {
+                    const declinedCallerId = await AsyncStorage.getItem('DECLINED_CALL');
+                    if (declinedCallerId) {
+                        await AsyncStorage.removeItem('DECLINED_CALL');
+                        console.log('[CallContext] Background decline detected — cleaning up call state');
+                        // Also emit via socket so the caller sees declined (belt + suspenders
+                        // alongside the REST call already made by the background handler).
+                        socketService.getSocket()?.emit('call-declined', { to: declinedCallerId });
+                        cleanupCall();
+                    }
+                } catch (e) {
+                    console.error('[CallContext] Error checking DECLINED_CALL:', e);
+                }
+            }
+        });
+        return () => sub.remove();
+    }, []); // mount once — cleanupCall uses refs, safe
+
+    // ── Call actions ───────────────────────────────────────────────────────────
 
     const startCall = async (userId: string, userName: string, userRole?: string) => {
         if (!webrtcAvailable) {
-            Alert.alert('Not Supported', 'Calls verify development build.');
+            Alert.alert('Not Supported', 'Calls require a development build.');
             return;
         }
 
         console.log('[CallContext] Starting call to:', userId, userName);
+        isHandlingCall.current = true;
+
         setCallState({
             isActive: false,
             isIncoming: false,
@@ -203,47 +274,79 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             remoteUser: { id: userId, name: userName, role: userRole },
         });
 
-        // Reset refs for new call
         remoteDescriptionSet.current = false;
         iceCandidateQueue.current = [];
+        remoteUserRef.current = { id: userId, name: userName, role: userRole };
 
-        // Set timeout for unreachable (30 seconds)
-        const callTimeout = setTimeout(() => {
-            if (callState.isOutgoing && !callState.isActive) {
-                console.log('Call timeout - user unreachable');
-                setCallState(prev => ({ ...prev, callStatus: 'unreachable', isOutgoing: false }));
-                setTimeout(() => cleanupCall(), 2000);
-            }
+        // Timeout: 30 s with no answer → unreachable
+        const callTimeoutId = setTimeout(() => {
+            setCallState(prev => {
+                if (prev.isOutgoing && !prev.isActive) {
+                    console.log('[CallContext] Call timeout — unreachable');
+                    // Signal cancel to recipient so their notification can be dismissed
+                    socketService.getSocket()?.emit('call-cancel', { to: userId });
+                    setTimeout(() => cleanupCall(), 2000);
+                    return { ...prev, callStatus: 'unreachable', isOutgoing: false };
+                }
+                return prev;
+            });
         }, 30000);
 
-        setupPeerConnection(userId, true); // true = isCaller
+        // Store the timeout ref so we can clear it on answer/decline
+        timeoutRef.current = callTimeoutId;
 
-        // Clear timeout if call connects
-        return () => clearTimeout(callTimeout);
+        setupPeerConnection(userId, true);
     };
 
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const answerCall = async () => {
-        if (!callState.remoteUser) return;
-        // Dismiss the Notifee incoming call notification
-        notifee.cancelAllNotifications().catch(() => { });
+        if (!pendingOffer.current) {
+            console.warn('[CallContext] answerCall called but no pending offer');
+            return;
+        }
+        // Dismiss any Notifee notification (if answered via in-app button)
+        await dismissCallNotification();
+
+        // Use ref to get the current remote user (avoids stale closure issue)
+        const remoteUserId = remoteUserRef.current?.id;
         setCallState(prev => ({ ...prev, isActive: true, isIncoming: false, callStatus: 'connected' }));
-        await setupPeerConnection(callState.remoteUser!.id, false);
+
+        if (remoteUserId) {
+            await setupPeerConnection(remoteUserId, false);
+        }
     };
 
     const declineCall = () => {
         const socket = socketService.getSocket();
-        if (socket && callState.remoteUser && callState.isIncoming) {
-            // Emit call-declined event to notify the caller
-            socket.emit('call-declined', { to: callState.remoteUser.id });
+        const remoteId = remoteUserRef.current?.id;
+        if (socket && remoteId) {
+            socket.emit('call-declined', { to: remoteId });
         }
-
-        // Show declined status before cleaning up
+        dismissCallNotification();
         setCallState(prev => ({ ...prev, callStatus: 'declined', isIncoming: false }));
-        setTimeout(() => cleanupCall(), 2000); // Show "declined" for 2 seconds
+        setTimeout(() => cleanupCall(), 2000);
     };
 
-    const handleIncomingCallFromNotification = (callerInfo: { id: string; name: string; role: string }, offer: any) => {
-        console.log('[CallContext] Handling incoming call from notification:', callerInfo);
+    // Called by App.tsx Notifee foreground handler (answer tap from notification)
+    // or from index.ts when restoring a pending call after app launch from killed
+    const handleIncomingCallFromNotification = (
+        callerInfo: { id: string; name: string; role: string },
+        offer: any
+    ) => {
+        if (isHandlingCall.current) {
+            console.log('[CallContext] handleIncomingCallFromNotification — already handling, ignoring');
+            return;
+        }
+        console.log('[CallContext] Restoring incoming call from notification:', callerInfo);
+        isHandlingCall.current = true;
+
+        const parsedOffer = typeof offer === 'string' ? JSON.parse(offer) : offer;
+        pendingOffer.current = parsedOffer;
+        remoteDescriptionSet.current = false;
+        iceCandidateQueue.current = [];
+        remoteUserRef.current = callerInfo;
+
         setCallState({
             isActive: false,
             isIncoming: true,
@@ -252,31 +355,45 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             callStatus: 'ringing',
             remoteUser: callerInfo,
         });
-        pendingOffer.current = offer;
     };
 
     const endCall = () => {
         const socket = socketService.getSocket();
-        if (socket && callState.remoteUser) {
-            socket.emit('call-end', { to: callState.remoteUser.id });
+        if (socket && remoteUserRef.current) {
+            socket.emit('call-end', { to: remoteUserRef.current.id });
+        }
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
         }
         cleanupCall();
     };
 
     const cleanupCall = () => {
-        try { (InCallManager as any).stopRingtone(); } catch (e) { /* ignore */ }
-        Vibration.cancel(); // Stop background vibration
-        // Dismiss any lingering Notifee call notification
-        notifee.cancelAllNotifications().catch(() => { });
+        try { (InCallManager as any).stopRingtone(); } catch (_) { }
+        Vibration.cancel();
+        dismissCallNotification();
+
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+        }
+
         if (pc.current) {
             pc.current.close();
             pc.current = null;
         }
+        remoteUserRef.current = null;
         if (localStream) {
             localStream.getTracks().forEach((t: any) => t.stop());
             setLocalStream(null);
         }
         setRemoteStream(null);
+        isHandlingCall.current = false;
+        pendingOffer.current = null;
+        remoteDescriptionSet.current = false;
+        iceCandidateQueue.current = [];
+
         setCallState({
             isActive: false,
             isIncoming: false,
@@ -285,19 +402,16 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             callStatus: 'ended',
             remoteUser: null,
         });
-        pendingOffer.current = null;
     };
 
     const setupPeerConnection = async (remoteId: string, isCaller: boolean) => {
         try {
             pc.current = new RTCPeerConnection(configuration);
 
-            // Get Local Stream
             const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
             setLocalStream(stream);
             stream.getTracks().forEach((track: any) => pc.current.addTrack(track, stream));
 
-            // Candidate handling
             pc.current.onicecandidate = (event: any) => {
                 const socket = socketService.getSocket();
                 if (event.candidate && socket) {
@@ -305,12 +419,11 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             };
 
-            // Stream handling
             if ('onaddstream' in pc.current) {
                 pc.current.onaddstream = (event: any) => setRemoteStream(event.stream);
             } else if ('ontrack' in pc.current) {
                 pc.current.ontrack = (event: any) => {
-                    if (event.streams && event.streams[0]) setRemoteStream(event.streams[0]);
+                    if (event.streams?.[0]) setRemoteStream(event.streams[0]);
                 };
             }
 
@@ -319,94 +432,78 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 await pc.current.setLocalDescription(offer);
                 console.log('[CallContext] Emitting call-offer to:', remoteId);
                 socketService.getSocket()?.emit('call-offer', { to: remoteId, offer });
-
-                // Update status to 'ringing' after call offer is sent
                 setCallState(prev => ({ ...prev, callStatus: 'ringing' }));
             } else {
-                // We are answering. We should have a pending offer.
                 if (pendingOffer.current) {
                     console.log('[CallContext] Answering call from:', remoteId);
                     await pc.current.setRemoteDescription(new RTCSessionDescription(pendingOffer.current));
-                    remoteDescriptionSet.current = true; // Mark remote description as set
+                    remoteDescriptionSet.current = true;
 
-                    // Process any queued candidates that arrived while processing offer
-                    if (iceCandidateQueue.current.length > 0) {
-                        console.log(`[CallContext] Processing ${iceCandidateQueue.current.length} queued candidates (Answer Side)`);
-                        for (const candidate of iceCandidateQueue.current) {
-                            try {
-                                await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
-                            } catch (e) {
-                                console.error('Error adding queued ice candidate:', e);
-                            }
+                    for (const candidate of iceCandidateQueue.current) {
+                        try {
+                            await pc.current.addIceCandidate(new RTCIceCandidate(candidate));
+                        } catch (e) {
+                            console.error('[CallContext] Error adding queued candidate (answer side):', e);
                         }
-                        iceCandidateQueue.current = [];
                     }
+                    iceCandidateQueue.current = [];
 
                     const answer = await pc.current.createAnswer();
                     await pc.current.setLocalDescription(answer);
                     console.log('[CallContext] Emitting call-answer to:', remoteId);
                     socketService.getSocket()?.emit('call-answer', { to: remoteId, answer });
+                } else {
+                    console.error('[CallContext] No pending offer found when trying to answer');
+                    cleanupCall();
                 }
             }
-
         } catch (e) {
-            console.error('Setup peer connection error:', e);
+            console.error('[CallContext] setupPeerConnection error:', e);
             cleanupCall();
         }
     };
 
-    // Toggle Mute Helper
     const toggleMute = () => {
         if (localStream) {
             const track = localStream.getAudioTracks()[0];
             if (track) track.enabled = !track.enabled;
-            return !track.enabled; // returns isMuted
+            return !track?.enabled;
         }
         return false;
     };
 
-    // Toggle Speaker
     const toggleSpeaker = () => {
-        const newSpeakerState = !callState.isSpeakerOn;
-        setCallState(prev => ({ ...prev, isSpeakerOn: newSpeakerState }));
-
-        // Use InCallManager to actually route audio
-        if (newSpeakerState) {
-            InCallManager.setForceSpeakerphoneOn(true);
-        } else {
-            InCallManager.setForceSpeakerphoneOn(false);
-        }
+        const newVal = !callState.isSpeakerOn;
+        setCallState(prev => ({ ...prev, isSpeakerOn: newVal }));
+        InCallManager.setForceSpeakerphoneOn(newVal);
     };
 
-    // Ringtone + Vibration: play when incoming, stop when no longer incoming
+    // ── Ringtone + vibration ────────────────────────────────────────────────────
     useEffect(() => {
         if (callState.isIncoming && !callState.isActive) {
-            console.log('[CallContext] Starting ringtone + vibration');
-            try {
-                (InCallManager as any).startRingtone('_BUNDLE_', false, '', 'alert');
-            } catch (e) {
-                console.log('[CallContext] startRingtone not supported:', e);
+            // Only ring locally when app is in foreground
+            // (backgrounded → ringtone comes from the Notifee notification sound)
+            const appState = AppState.currentState;
+            if (appState === 'active') {
+                try {
+                    (InCallManager as any).startRingtone('_BUNDLE_', false, '', 'alert');
+                } catch (e) {
+                    console.log('[CallContext] startRingtone not supported:', e);
+                }
+                Vibration.vibrate([0, 1000, 1000], true);
             }
-            // Explicit vibration — InCallManager vibrate flag is unreliable on Android
-            // Pattern: wait 0ms, vibrate 1s, pause 1s, repeat
-            Vibration.vibrate([0, 1000, 1000], true);
         } else {
-            try {
-                (InCallManager as any).stopRingtone();
-            } catch (e) { /* ignore */ }
+            try { (InCallManager as any).stopRingtone(); } catch (_) { }
             Vibration.cancel();
         }
     }, [callState.isIncoming, callState.isActive]);
 
-    // Manage InCallManager lifecycle
+    // ── InCallManager lifecycle ─────────────────────────────────────────────────
     useEffect(() => {
         if (callState.isActive) {
-            // Start audio session when call becomes active
             InCallManager.start({ media: 'audio' });
-            // Default to earpiece
             InCallManager.setForceSpeakerphoneOn(false);
         } else if (!callState.isIncoming && !callState.isOutgoing) {
-            // Stop audio session when call ends
             InCallManager.stop();
         }
     }, [callState.isActive, callState.isIncoming, callState.isOutgoing]);
@@ -423,7 +520,6 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             webrtcAvailable,
         }}>
             {children}
-            {/* Global Call UI */}
             {(callState.isIncoming || callState.isOutgoing || callState.isActive ||
                 callState.callStatus === 'declined' || callState.callStatus === 'unreachable') && (
                     <CallModal

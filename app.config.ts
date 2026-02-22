@@ -29,7 +29,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "android.permission.RECORD_AUDIO",
             "android.permission.MODIFY_AUDIO_SETTINGS",
             "android.permission.VIBRATE",
-            "android.permission.POST_NOTIFICATIONS"
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.USE_FULL_SCREEN_INTENT",
+            "android.permission.RECEIVE_BOOT_COMPLETED"
         ],
         edgeToEdgeEnabled: true,
         predictiveBackGestureEnabled: false,
@@ -56,7 +58,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             {
                 android: {
                     useAndroidX: true,
-                    enableProguardInReleaseBuilds: true
+                    enableProguardInReleaseBuilds: true,
+                    usesCleartextTraffic: true,
+                    extraMavenRepos: [
+                        // Notifee local maven repo — used because dl.notifee.app is unreachable.
+                        // expo-build-properties injects this into android/build.gradle during prebuild,
+                        // so NO manual patching is needed after `expo prebuild`.
+                        "$rootDir/../node_modules/@notifee/react-native/android/libs"
+                    ]
                 }
             }
         ],

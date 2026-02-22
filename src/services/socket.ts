@@ -29,14 +29,16 @@ class SocketService {
             console.log('[SocketService] Connected:', this.socket?.id);
             await this.registerUser();
 
-            // Attach pending listeners
+            // Attach pending listeners ONCE only, then clear the queue.
+            // Do NOT also attach them in the immediate block below — that causes
+            // every listener to be registered twice, leading to duplicate events.
             this.pendingListeners.forEach(({ event, callback }) => {
                 this.socket?.on(event, callback);
             });
-            this.pendingListeners = []; // Clear queue
+            this.pendingListeners = [];
         });
 
-        // Re-register on reconnect
+        // Re-register user identity on reconnect (socket id changes)
         this.socket.on('reconnect', async () => {
             console.log('[SocketService] Reconnected, re-registering user');
             await this.registerUser();
@@ -50,18 +52,9 @@ class SocketService {
             console.log('[SocketService] Connect Error:', err);
         });
 
-        // Also attach pending listeners if socket object exists but not connected yet
-        // (Though usually 'connect' event is safer, we can try attaching immediately if socket instance exists)
-        if (this.socket) {
-            this.pendingListeners.forEach(({ event, callback }) => {
-                // Check if already has listener to avoid dupes? 
-                // socket.io allows multiple, but we probably want one.
-                // For simplicity, just attach.
-                if (!this.socket?.hasListeners(event)) {
-                    this.socket?.on(event, callback);
-                }
-            });
-        }
+        // NOTE: We intentionally do NOT attach pendingListeners here synchronously.
+        // The 'connect' event handler above is the single authoritative place they
+        // get attached. Doing both causes every listener to be registered twice.
     }
 
     async registerUser() {
@@ -83,7 +76,7 @@ class SocketService {
         }
     }
 
-    // Generic listener attacher
+    // Generic listener attacher — queues if socket not yet connected
     private on(event: string, callback: (data: any) => void) {
         if (this.socket) {
             this.socket.on(event, callback);
@@ -98,17 +91,13 @@ class SocketService {
             if (callback) this.socket.off(event, callback);
             else this.socket.off(event);
         }
-        // Also remove from pending if present
-        this.pendingListeners = this.pendingListeners.filter(l => l.event !== event || (callback && l.callback !== callback));
+        this.pendingListeners = this.pendingListeners.filter(
+            l => l.event !== event || (callback && l.callback !== callback)
+        );
     }
 
-    joinGroup(groupId: string) {
-        this.emit('join_group', groupId);
-    }
-
-    leaveGroup(groupId: string) {
-        this.emit('leave_group', groupId);
-    }
+    joinGroup(groupId: string) { this.emit('join_group', groupId); }
+    leaveGroup(groupId: string) { this.emit('leave_group', groupId); }
 
     sendLocation(data: { groupId: string; pilgrimId: string; lat: number; lng: number; isSos?: boolean }) {
         if (!this.socket) return;
@@ -119,42 +108,30 @@ class SocketService {
         this.emit('sos_alert', data);
     }
 
-    // Event Wrappers
+    // ── Event wrappers (all using the queueing `on/off`) ─────────────────────
+
     onLocationUpdate(callback: (data: any) => void) { this.on('location_update', callback); }
     offLocationUpdate(callback?: (data: any) => void) { this.off('location_update', callback); }
 
-    onSOSAlert(callback: (data: any) => void) {
-        this.socket?.on('sos_alert', callback);
-    }
+    onSOSAlert(callback: (data: any) => void) { this.on('sos_alert', callback); }
+    offSOSAlert(callback?: (data: any) => void) { this.off('sos_alert', callback); }
 
-    offSOSAlert(callback: (data: any) => void) {
-        this.socket?.off('sos_alert', callback);
-    }
-
-    onStatusUpdate(callback: (data: any) => void) {
-        this.socket?.on('status_update', callback);
-    }
-
-    offStatusUpdate(callback: (data: any) => void) {
-        this.socket?.off('status_update', callback);
-    }
+    onStatusUpdate(callback: (data: any) => void) { this.on('status_update', callback); }
+    offStatusUpdate(callback?: (data: any) => void) { this.off('status_update', callback); }
 
     onNewMessage(callback: (data: any) => void) { this.on('new_message', callback); }
     offNewMessage(callback?: (data: any) => void) { this.off('new_message', callback); }
 
-    // Missed Call Events (Real-time)
     onMissedCallReceived(callback: (data: any) => void) { this.on('missed-call-received', callback); }
     offMissedCallReceived(callback?: (data: any) => void) { this.off('missed-call-received', callback); }
 
-    // Battery Update Events (Real-time)
     onBatteryUpdate(callback: (data: any) => void) { this.on('battery-update', callback); }
     offBatteryUpdate(callback?: (data: any) => void) { this.off('battery-update', callback); }
 
-    // SOS Alert Events (Real-time)
     onSOSAlertReceived(callback: (data: any) => void) { this.on('sos-alert-received', callback); }
     offSOSAlertReceived(callback?: (data: any) => void) { this.off('sos-alert-received', callback); }
 
-    // Call Events
+    // Call signaling
     onCallOffer(callback: (data: any) => void) { this.on('call-offer', callback); }
     offCallOffer(callback?: (data: any) => void) { this.off('call-offer', callback); }
 
@@ -167,6 +144,14 @@ class SocketService {
     onCallEnd(callback: (data: any) => void) { this.on('call-end', callback); }
     offCallEnd(callback?: (data: any) => void) { this.off('call-end', callback); }
 
+    onCallDeclined(callback: (data: any) => void) { this.on('call-declined', callback); }
+    offCallDeclined(callback?: (data: any) => void) { this.off('call-declined', callback); }
+
+    onCallBusy(callback: (data: any) => void) { this.on('call-busy', callback); }
+    offCallBusy(callback?: (data: any) => void) { this.off('call-busy', callback); }
+
+    onCallCancel(callback: (data: any) => void) { this.on('call-cancel', callback); }
+    offCallCancel(callback?: (data: any) => void) { this.off('call-cancel', callback); }
 
     private emit(event: string, data: any) {
         if (this.socket) {

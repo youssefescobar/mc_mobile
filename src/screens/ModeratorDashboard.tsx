@@ -159,11 +159,15 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
             `${data.pilgrim_name} needs immediate help in ${data.group_name}\n\nPhone: ${data.pilgrim_phone}`,
             [
                 { text: t('dismiss'), style: 'cancel' },
-                { 
-                    text: t('locate'), 
+                {
+                    text: t('locate'),
                     onPress: () => {
                         // Navigate to group map with SOS pilgrim highlighted
-                        navigation.navigate('GroupDetails', { groupId: data.group_id });
+                        navigation.navigate('GroupDetails', {
+                            groupId: data.group_id,
+                            groupName: data.group_name,
+                            focusPilgrimId: data.pilgrim_id
+                        });
                     }
                 }
             ]
@@ -185,7 +189,7 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
                 await new Promise(r => setTimeout(r, 1000));
             }
             await socketService.registerUser();
-            
+
             // Listen for real-time SOS alerts & missed calls
             socketService.onSOSAlertReceived(handleSOSAlert);
             socketService.onMissedCallReceived(handleMissedCallReceived);
