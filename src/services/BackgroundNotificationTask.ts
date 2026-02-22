@@ -2,20 +2,26 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
+import { AppState, Vibration } from 'react-native';
 import notifee, { AndroidImportance, AndroidCategory } from '@notifee/react-native';
 
 
 export const BACKGROUND_NOTIFICATION_TASK = 'BACKGROUND-NOTIFICATION-TASK';
 
 // Create the call notification channel (Notifee)
+// IMPORTANCE.HIGH is required for fullScreenIntent on Android.
+// The vibrationPattern on the channel is what vibrates the phone in background/killed state
+// (the React Native Vibration API is unreliable outside the UI thread).
 async function ensureCallChannel() {
     await notifee.createChannel({
         id: 'incoming_call_ui',
         name: 'Incoming Calls',
         importance: AndroidImportance.HIGH,
         vibration: true,
-        vibrationPattern: [300, 500, 300, 500],
+        // Repeating: buzz 800ms, pause 600ms, buzz 800ms, pause 600ms ...
+        vibrationPattern: [800, 600, 800, 600, 800, 600, 800, 600],
         sound: 'default',
+        bypassDnd: true,
     });
 }
 
@@ -31,6 +37,13 @@ TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error, execu
 
         // ── Incoming Call (Notifee fullScreenIntent) ───────────────────────────
         if (notificationData?.type === 'incoming_call') {
+            // If the app is in the foreground, the socket event already shows the CallModal.
+            // Skip the Notifee notification to avoid double UI.
+            if (AppState.currentState === 'active') {
+                console.log('[BackgroundTask] App is foregrounded — skipping Notifee call notification');
+                return;
+            }
+
             try {
                 await ensureCallChannel();
 
@@ -66,7 +79,8 @@ TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error, execu
                             },
                         ],
                         sound: 'default',
-                        vibrationPattern: [300, 500, 300, 500, 300, 500],
+                        // Vibration pattern on the notification itself (OS-level, works when killed)
+                        vibrationPattern: [800, 600, 800, 600, 800, 600, 800, 600],
                         ongoing: true,
                         autoCancel: false,
                         color: '#2563EB',
@@ -75,6 +89,11 @@ TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error, execu
                 });
 
                 console.log('[BackgroundTask] ✓ Incoming call fullScreenIntent displayed');
+
+                // Also attempt JS-side vibration for backgrounded (not killed) state as a supplement
+                // This is a no-op if the JS thread isn't fully active (killed state) — that's fine,
+                // because the Notifee channel vibrationPattern handles the OS-level buzz.
+                try { Vibration.vibrate([800, 600, 800, 600, 800, 600], true); } catch (_) { }
             } catch (e) {
                 console.error('[BackgroundTask] Failed to show call fullScreenIntent:', e);
             }

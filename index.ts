@@ -1,6 +1,11 @@
 import { registerRootComponent } from 'expo';
+// ── CRITICAL: Register background task at root level BEFORE anything else.
+// When the app is killed, RN starts from index.ts. If this import is only in
+// App.tsx, the task is never registered and the killed-state call UI never shows.
+import './src/services/BackgroundNotificationTask';
 import './src/i18n'; // Initialize i18n
 import notifee, { EventType } from '@notifee/react-native';
+import { Vibration } from 'react-native';
 
 import App from './App';
 
@@ -14,30 +19,35 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
 
     if (type === EventType.ACTION_PRESS) {
         if (detail.pressAction?.id === 'decline') {
-            // Cancel notification first for instant UI feedback
+            // Cancel notification + vibration immediately for instant feedback
             if (detail.notification?.id) {
                 await notifee.cancelNotification(detail.notification.id);
             }
+            Vibration.cancel();
 
             // Notify the caller via backend REST endpoint
-            // (We can't access the socket here, but the backend can relay it)
             try {
-                const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
-                await fetch(`${API_URL}/api/call-history/decline`, {
+                const API_URL = (process.env.EXPO_PUBLIC_API_URL || '').replace('/api', '');
+                const declineUrl = `${API_URL}/api/call-history/decline`;
+                console.log('[Notifee BG] Calling decline endpoint:', declineUrl);
+
+                const response = await fetch(declineUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ callerId: data.callerId }),
                 });
-                console.log('[Notifee BG] Decline sent to backend for caller:', data.callerId);
+                const result = await response.json();
+                console.log('[Notifee BG] Decline result:', result);
             } catch (e) {
                 console.error('[Notifee BG] Failed to notify backend of decline:', e);
             }
 
         } else if (detail.pressAction?.id === 'answer') {
-            // Just cancel notification — app will open and foreground handler takes over
+            // Just cancel — app will open and foreground handler takes over
             if (detail.notification?.id) {
                 await notifee.cancelNotification(detail.notification.id);
             }
+            Vibration.cancel();
             console.log('[Notifee BG] Answer tapped, handing off to foreground');
         }
     }

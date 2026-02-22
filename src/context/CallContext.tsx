@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Vibration } from 'react-native';
 import CallModal from '../components/CallModal';
 import { socketService } from '../services/socket';
 import InCallManager from 'react-native-incall-manager';
@@ -265,6 +265,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const cleanupCall = () => {
         try { (InCallManager as any).stopRingtone(); } catch (e) { /* ignore */ }
+        Vibration.cancel(); // Stop background vibration
         // Dismiss any lingering Notifee call notification
         notifee.cancelAllNotifications().catch(() => { });
         if (pc.current) {
@@ -377,20 +378,23 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    // Ringtone: play when incoming, stop when no longer incoming
+    // Ringtone + Vibration: play when incoming, stop when no longer incoming
     useEffect(() => {
         if (callState.isIncoming && !callState.isActive) {
-            console.log('[CallContext] Starting ringtone');
+            console.log('[CallContext] Starting ringtone + vibration');
             try {
-                // startRingtone(ringtone, vibrate, url, type)
-                (InCallManager as any).startRingtone('_BUNDLE_', true, '', 'alert');
+                (InCallManager as any).startRingtone('_BUNDLE_', false, '', 'alert');
             } catch (e) {
                 console.log('[CallContext] startRingtone not supported:', e);
             }
+            // Explicit vibration — InCallManager vibrate flag is unreliable on Android
+            // Pattern: wait 0ms, vibrate 1s, pause 1s, repeat
+            Vibration.vibrate([0, 1000, 1000], true);
         } else {
             try {
                 (InCallManager as any).stopRingtone();
             } catch (e) { /* ignore */ }
+            Vibration.cancel();
         }
     }, [callState.isIncoming, callState.isActive]);
 

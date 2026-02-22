@@ -142,6 +142,18 @@ class SocketService {
     onNewMessage(callback: (data: any) => void) { this.on('new_message', callback); }
     offNewMessage(callback?: (data: any) => void) { this.off('new_message', callback); }
 
+    // Missed Call Events (Real-time)
+    onMissedCallReceived(callback: (data: any) => void) { this.on('missed-call-received', callback); }
+    offMissedCallReceived(callback?: (data: any) => void) { this.off('missed-call-received', callback); }
+
+    // Battery Update Events (Real-time)
+    onBatteryUpdate(callback: (data: any) => void) { this.on('battery-update', callback); }
+    offBatteryUpdate(callback?: (data: any) => void) { this.off('battery-update', callback); }
+
+    // SOS Alert Events (Real-time)
+    onSOSAlertReceived(callback: (data: any) => void) { this.on('sos-alert-received', callback); }
+    offSOSAlertReceived(callback?: (data: any) => void) { this.off('sos-alert-received', callback); }
+
     // Call Events
     onCallOffer(callback: (data: any) => void) { this.on('call-offer', callback); }
     offCallOffer(callback?: (data: any) => void) { this.off('call-offer', callback); }

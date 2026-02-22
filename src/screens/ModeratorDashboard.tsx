@@ -50,6 +50,12 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
         }
     };
 
+    // Real-time: Listen for new missed calls via socket
+    const handleMissedCallReceived = (data: any) => {
+        console.log('[ModeratorDashboard] Missed call received:', data);
+        setMissedCallCount(prev => prev + 1);
+    };
+
     const fetchNotifications = useCallback(async () => {
         try {
             const response = await api.get('/notifications?limit=1');
@@ -144,12 +150,63 @@ export default function ModeratorDashboard({ route, navigation }: Props) {
         }
     };
 
+    // Real-time: Handle SOS alerts from socket
+    const handleSOSAlert = (data: any) => {
+        console.log('[ModeratorDashboard] SOS Alert received:', data);
+        showToast(`🚨 SOS: ${data.pilgrim_name} needs help!`, 'error');
+        Alert.alert(
+            '🚨 SOS ALERT',
+            `${data.pilgrim_name} needs immediate help in ${data.group_name}\n\nPhone: ${data.pilgrim_phone}`,
+            [
+                { text: t('dismiss'), style: 'cancel' },
+                { 
+                    text: t('locate'), 
+                    onPress: () => {
+                        // Navigate to group map with SOS pilgrim highlighted
+                        navigation.navigate('GroupDetails', { groupId: data.group_id });
+                    }
+                }
+            ]
+        );
+        // Re-fetch notifications to update UI
+        fetchNotifications();
+    };
+
     // Initial Load
     useEffect(() => {
         fetchGroups();
         fetchProfile();
         setupLocationTracking();
+
+        // Setup socket connection and listeners
+        const setupSocket = async () => {
+            if (!socketService.socket?.connected) {
+                await socketService.connect();
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            await socketService.registerUser();
+            
+            // Listen for real-time SOS alerts & missed calls
+            socketService.onSOSAlertReceived(handleSOSAlert);
+            socketService.onMissedCallReceived(handleMissedCallReceived);
+        };
+        setupSocket();
+
+        return () => {
+            socketService.offSOSAlertReceived(handleSOSAlert);
+            socketService.offMissedCallReceived(handleMissedCallReceived);
+        };
     }, []);
+
+    // Join all group rooms when groups are fetched (for real-time group events like SOS)
+    useEffect(() => {
+        if (groups.length > 0) {
+            groups.forEach(group => {
+                socketService.joinGroup(group._id);
+                console.log(`[ModeratorDashboard] Joined group: ${group._id}`);
+            });
+        }
+    }, [groups]);
 
     // Refresh data when screen comes into focus
     useFocusEffect(

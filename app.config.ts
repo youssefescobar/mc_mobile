@@ -27,7 +27,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "android.permission.WAKE_LOCK",
             "android.permission.CAMERA",
             "android.permission.RECORD_AUDIO",
-            "android.permission.MODIFY_AUDIO_SETTINGS"
+            "android.permission.MODIFY_AUDIO_SETTINGS",
+            "android.permission.VIBRATE",
+            "android.permission.POST_NOTIFICATIONS"
         ],
         edgeToEdgeEnabled: true,
         predictiveBackGestureEnabled: false,

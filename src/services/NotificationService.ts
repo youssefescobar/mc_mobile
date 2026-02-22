@@ -20,22 +20,24 @@ export async function registerForPushNotificationsAsync() {
         await Notifications.setNotificationChannelAsync('default', {
             name: 'Default',
             importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
+            vibrationPattern: [250, 250, 250, 250],
             lightColor: '#FF231F7C',
         });
 
         await Notifications.setNotificationChannelAsync('urgent', {
             name: 'Urgent',
             importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 500, 500, 500],
+            vibrationPattern: [500, 500, 500, 500],
             lightColor: '#FF0000',
             sound: 'urgent.wav', // We need to add this sound file
         });
 
+        // Note: incoming_call notifications are handled by Notifee in BackgroundNotificationTask
+        // when app is background/killed. This channel is kept for consistency with foreground flow.
         await Notifications.setNotificationChannelAsync('incoming_call', {
             name: 'Incoming Calls',
             importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 1000, 1000, 1000, 1000, 1000],
+            vibrationPattern: [800, 600, 800, 600, 800, 600, 800, 600],
             lightColor: '#00FF00',
             sound: 'default',
             enableVibrate: true,

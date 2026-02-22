@@ -4,7 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from './src/services/NotificationService';
-import './src/services/BackgroundNotificationTask'; // Register background task
+// Note: BackgroundNotificationTask is registered in index.ts (root level) for killed-state support
 import notifee, { EventType } from '@notifee/react-native';
 
 import { CallProvider, useCall } from './src/context/CallContext';

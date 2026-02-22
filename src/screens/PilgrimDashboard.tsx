@@ -54,6 +54,18 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
             console.error('Failed to fetch missed call count', error);
         }
     };
+
+    // Real-time: Listen for new missed calls via socket
+    const handleMissedCallReceived = (data: any) => {
+        console.log('[Dashboard] Missed call received:', data);
+        setMissedCallCount(prev => prev + 1);
+    };
+
+    // Real-time: Listen for battery updates via socket
+    const handleBatteryUpdate = (data: any) => {
+        console.log('[Dashboard] Battery update:', data.battery_percent);
+        setBatteryLevel(data.battery_percent);
+    };
     const [isSharingLocation, setIsSharingLocation] = useState(true);
     const [locationSubscription, setLocationSubscription] = useState<Location.LocationSubscription | null>(null);
     const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -105,7 +117,7 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                 async (location) => {
                     try {
                         const battery = await Battery.getBatteryLevelAsync();
-                        await api.put('/pilgrims/location', {
+                        await api.put('/pilgrim/location', {
                             latitude: location.coords.latitude,
                             longitude: location.coords.longitude,
                             battery_percent: Math.round(battery * 100)
@@ -170,9 +182,11 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
 
     useFocusEffect(
         React.useCallback(() => {
+            // Fetch initial counts on screen focus (in case app was backgrounded)
             if (!groupInfo) fetchGroupInfo();
             fetchNotifications();
             fetchMissedCallCount();
+            // Socket events will handle real-time updates from here
         }, [groupInfo])
     );
 
@@ -196,9 +210,16 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                 }
             }
         };
+
+        // Listen to socket events
         socketService.onNewMessage(handleNewMessage);
+        socketService.onMissedCallReceived(handleMissedCallReceived);
+        socketService.onBatteryUpdate(handleBatteryUpdate);
+
         return () => {
             socketService.offNewMessage(handleNewMessage);
+            socketService.offMissedCallReceived(handleMissedCallReceived);
+            socketService.offBatteryUpdate(handleBatteryUpdate);
             socketService.leaveGroup(groupInfo.group_id);
         };
     }, [groupInfo]);
@@ -503,6 +524,13 @@ export default function PilgrimDashboard({ navigation, route }: Props) {
                             <Text style={[styles.menuText, isToolsExpanded && styles.menuTextActive]}>
                                 {isToolsExpanded ? t('close') : t('menu')}
                             </Text>
+                            {(missedCallCount + unreadCount) > 0 && (
+                                <View style={styles.clusterBadge}>
+                                    <Text style={styles.clusterBadgeText}>
+                                        {(missedCallCount + unreadCount) > 9 ? '9+' : (missedCallCount + unreadCount)}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     </TouchableOpacity>
 
