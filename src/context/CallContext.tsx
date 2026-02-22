@@ -51,7 +51,30 @@ export const useCall = () => {
     return context;
 };
 
-const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const configuration = {
+    iceServers: [
+        // STUN — discovers public IP, works for ~80% of networks
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        // TURN — relays media when direct connection fails (symmetric NAT, mobile carriers, etc.)
+        // Free relay from Metered.ca — replace with your own for production
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+    ],
+};
 
 export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [callState, setCallState] = useState({
